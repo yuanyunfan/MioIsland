@@ -148,10 +148,13 @@ class BuddyReader: ObservableObject {
         let bones: Bones
         if let cached = Self.readCachedBones() {
             bones = cached
-        } else if let bunBones = Self.computeBonesViaNode(userId: userId, salt: salt) {
+        } else if let bunBones = Self.computeBonesViaBun(userId: userId, salt: salt) {
+            // Bun uses wyhash — matches Claude Code exactly
             bones = bunBones
         } else {
+            // Fallback: Swift wyhash (accurate for userId+salt which is always 51+ bytes)
             bones = Self.computeBones(userId: userId, salt: salt)
+            Self.cacheBones(bones)
         }
 
         buddy = BuddyInfo(
@@ -264,37 +267,19 @@ class BuddyReader: ObservableObject {
         )
     }
 
-    // MARK: - Node Computation (most accurate — uses FNV-1a like Claude Code)
+    // MARK: - Bun Computation (most accurate — uses Bun.hash/wyhash like Claude Code)
 
-    private static func computeBonesViaNode(userId: String, salt: String) -> Bones? {
-        // Search for bun FIRST (Claude Code uses Bun.hash/wyhash), then node as fallback
+    private static func computeBonesViaBun(userId: String, salt: String) -> Bones? {
+        // Search for bun only — Claude Code always uses Bun.hash (wyhash)
         let home = FileManager.default.homeDirectoryForCurrentUser.path
-        var runtimePaths = [
-            // Bun first — matches Claude Code's actual runtime
+        let bunPaths = [
             home + "/bin/bun", home + "/.bun/bin/bun",
             "/opt/homebrew/bin/bun", "/usr/local/bin/bun",
-            // Node fallback — uses FNV-1a (different hash, only for non-Bun installs)
-            "/opt/homebrew/bin/node", "/usr/local/bin/node", "/usr/bin/node",
         ]
-        // Add nvm node paths at the END (after bun)
-        let nvmDir = home + "/.nvm/versions/node"
-        if let versions = try? FileManager.default.contentsOfDirectory(atPath: nvmDir) {
-            for v in versions.sorted().reversed() {
-                runtimePaths.append(nvmDir + "/" + v + "/bin/node")
-            }
-        }
-        guard let runtimePath = runtimePaths.first(where: { FileManager.default.isExecutableFile(atPath: $0) }) else { return nil }
-
-        let isBun = runtimePath.hasSuffix("/bun")
-
-        // Claude Code uses FNV-1a when running under Node (not Bun)
-        // When Bun is available, use Bun.hash (wyhash) instead
-        let hashFn = isBun
-            ? "function H(s){return Number(BigInt(Bun.hash(s))&0xffffffffn)}"
-            : "function H(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return h>>>0}"
+        guard let bunPath = bunPaths.first(where: { FileManager.default.isExecutableFile(atPath: $0) }) else { return nil }
 
         let script = """
-        \(hashFn)
+        function H(s){return Number(BigInt(Bun.hash(s))&0xffffffffn)}
         const S=['duck','goose','blob','cat','dragon','octopus','owl','penguin','turtle','snail','ghost','axolotl','capybara','cactus','robot','rabbit','mushroom','chonk'];
         const R=['common','uncommon','rare','epic','legendary'];
         const W={common:60,uncommon:25,rare:10,epic:4,legendary:1};
@@ -320,7 +305,7 @@ class BuddyReader: ObservableObject {
 
         let process = Process()
         let pipe = Pipe()
-        process.executableURL = URL(fileURLWithPath: runtimePath)
+        process.executableURL = URL(fileURLWithPath: bunPath)
         process.arguments = ["-e", script]
         process.standardOutput = pipe
         process.standardError = FileHandle.nullDevice
@@ -368,19 +353,11 @@ class BuddyReader: ObservableObject {
         }
     }
 
-    /// FNV-1a hash — matches Claude Code's non-Bun fallback exactly
-    private static func fnv1a(_ string: String) -> UInt32 {
-        var h: UInt32 = 2166136261
-        for c in string.utf8 {
-            h ^= UInt32(c)
-            h = h &* 16777619
-        }
-        return h
-    }
-
     private static func computeBones(userId: String, salt: String) -> Bones {
         let key = userId + salt
-        let seed = fnv1a(key)
+        // Use wyhash — matches Claude Code (Bun.hash) for 51+ byte keys
+        let hash = WyHash.hash(key)
+        let seed = UInt32(hash & 0xFFFFFFFF)
         var rng = Mulberry32(seed: seed)
 
         // Rarity FIRST (must match Claude Code's rollFrom order)
