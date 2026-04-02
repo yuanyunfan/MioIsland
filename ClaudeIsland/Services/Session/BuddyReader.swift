@@ -143,11 +143,16 @@ class BuddyReader: ObservableObject {
             userId = "anon"
         }
 
-        // Read salt from Claude Code binary (supports patched installs)
+        // Try to get accurate bones via bun (cached), fallback to Swift wyhash
         let salt = Self.readSalt()
-
-        // Compute bones using native wyhash (matches Bun.hash exactly)
-        let bones = Self.computeBones(userId: userId, salt: salt)
+        let bones: Bones
+        if let cached = Self.readCachedBones() {
+            bones = cached
+        } else if let bunBones = Self.computeBonesViaBun(userId: userId, salt: salt) {
+            bones = bunBones
+        } else {
+            bones = Self.computeBones(userId: userId, salt: salt)
+        }
 
         buddy = BuddyInfo(
             name: name,
@@ -222,7 +227,99 @@ class BuddyReader: ObservableObject {
         return originalSalt
     }
 
-    // MARK: - Bones Computation (Mulberry32 + WyHash)
+    // MARK: - Cached Bones
+
+    private static let bonesCachePath = FileManager.default.homeDirectoryForCurrentUser.path + "/.claude/.codeisland-bones.json"
+
+    private static func readCachedBones() -> Bones? {
+        guard let data = try? Data(contentsOf: URL(fileURLWithPath: bonesCachePath)),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        return parseBones(json)
+    }
+
+    private static func cacheBones(_ bones: Bones) {
+        let stats = ["DEBUGGING": bones.stats.debugging, "PATIENCE": bones.stats.patience,
+                     "CHAOS": bones.stats.chaos, "WISDOM": bones.stats.wisdom, "SNARK": bones.stats.snark]
+        let dict: [String: Any] = [
+            "species": bones.species.rawValue, "rarity": bones.rarity.rawValue,
+            "eye": bones.eye, "hat": bones.hat, "shiny": bones.isShiny, "stats": stats
+        ]
+        if let data = try? JSONSerialization.data(withJSONObject: dict) {
+            try? data.write(to: URL(fileURLWithPath: bonesCachePath))
+        }
+    }
+
+    private static func parseBones(_ json: [String: Any]) -> Bones? {
+        guard let speciesStr = json["species"] as? String,
+              let rarityStr = json["rarity"] as? String,
+              let species = BuddySpecies(rawValue: speciesStr),
+              let rarity = BuddyRarity(rawValue: rarityStr) else { return nil }
+        let statsDict = json["stats"] as? [String: Int] ?? [:]
+        return Bones(
+            species: species, rarity: rarity,
+            stats: BuddyStats(debugging: statsDict["DEBUGGING"] ?? 0, patience: statsDict["PATIENCE"] ?? 0,
+                              chaos: statsDict["CHAOS"] ?? 0, wisdom: statsDict["WISDOM"] ?? 0, snark: statsDict["SNARK"] ?? 0),
+            eye: json["eye"] as? String ?? "·", hat: json["hat"] as? String ?? "none",
+            isShiny: json["shiny"] as? Bool ?? false
+        )
+    }
+
+    // MARK: - Bun Computation (most accurate)
+
+    private static func computeBonesViaBun(userId: String, salt: String) -> Bones? {
+        let bunPaths = [
+            FileManager.default.homeDirectoryForCurrentUser.path + "/bin/bun",
+            FileManager.default.homeDirectoryForCurrentUser.path + "/.bun/bin/bun",
+            "/opt/homebrew/bin/bun", "/usr/local/bin/bun"
+        ]
+        guard let bunPath = bunPaths.first(where: { FileManager.default.isExecutableFile(atPath: $0) }) else { return nil }
+
+        let script = """
+        const S=['duck','goose','blob','cat','dragon','octopus','owl','penguin','turtle','snail','ghost','axolotl','capybara','cactus','robot','rabbit','mushroom','chonk'];
+        const R=['common','uncommon','rare','epic','legendary'];
+        const W={common:60,uncommon:25,rare:10,epic:4,legendary:1};
+        const E=['·','✦','×','◉','@','°'];
+        const H=['none','crown','tophat','propeller','halo','wizard','beanie','tinyduck'];
+        const SN=['DEBUGGING','PATIENCE','CHAOS','WISDOM','SNARK'];
+        const RF={common:5,uncommon:15,rare:25,epic:35,legendary:50};
+        function m32(s){let a=s>>>0;return()=>{a|=0;a=(a+0x6d2b79f5)|0;let t=Math.imul(a^(a>>>15),1|a);t=(t+Math.imul(t^(t>>>7),61|t))^t;return((t^(t>>>14))>>>0)/4294967296}}
+        function pick(r,a){return a[Math.floor(r()*a.length)]}
+        const h=Number(BigInt(Bun.hash('\(userId)'+'\(salt)'))&0xffffffffn);
+        const r=m32(h);
+        let roll=r()*100,rarity='common';
+        for(const rr of R){roll-=W[rr];if(roll<0){rarity=rr;break}}
+        const species=pick(r,S),eye=pick(r,E);
+        const hat=rarity==='common'?'none':pick(r,H);
+        const shiny=r()<0.01;
+        const fl=RF[rarity];
+        const peak=pick(r,SN);let dump=pick(r,SN);while(dump===peak)dump=pick(r,SN);
+        const stats={};
+        for(const n of SN){if(n===peak)stats[n]=Math.min(100,fl+50+Math.floor(r()*30));else if(n===dump)stats[n]=Math.max(1,fl-10+Math.floor(r()*15));else stats[n]=fl+Math.floor(r()*40)}
+        console.log(JSON.stringify({species,rarity,eye,hat,shiny,stats}))
+        """
+
+        let process = Process()
+        let pipe = Pipe()
+        process.executableURL = URL(fileURLWithPath: bunPath)
+        process.arguments = ["-e", script]
+        process.standardOutput = pipe
+        process.standardError = FileHandle.nullDevice
+
+        do {
+            try process.run()
+            process.waitUntilExit()
+            guard process.terminationStatus == 0 else { return nil }
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let bones = parseBones(json) else { return nil }
+            cacheBones(bones) // Cache for next time
+            return bones
+        } catch {
+            return nil
+        }
+    }
+
+    // MARK: - Bones Computation (Mulberry32 + WyHash — fallback)
 
     private struct Bones {
         let species: BuddySpecies
