@@ -182,10 +182,7 @@ class NotchViewModel: ObservableObject {
                 // Re-post the click so it reaches the window/app behind us
                 repostClickAt(location)
             } else if geometry.notchScreenRect.contains(location) {
-                // Clicking notch while opened - only close if NOT in chat mode and NOT in instances mode
-                if !isInChatMode && contentType == .menu {
-                    notchClose()
-                }
+                // Don't close when clicking inside content — let buttons handle it
             }
         case .closed, .popping:
             if geometry.isPointInNotch(location) {
