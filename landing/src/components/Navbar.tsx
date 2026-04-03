@@ -1,9 +1,11 @@
 import { useState, useEffect } from "react"
-import { Download } from "lucide-react"
+import { Download, Globe } from "lucide-react"
+import { useI18n } from "../lib/i18n"
 import logo from "../lib/logo"
 
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false)
+  const { lang, setLang, t } = useI18n()
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 40)
@@ -19,21 +21,21 @@ export default function Navbar() {
           : "bg-transparent"
       }`}
     >
-      <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 sm:h-16 flex items-center justify-between">
         <a href="#" className="flex items-center gap-2 group">
           <img src={logo} alt="CodeIsland" className="w-6 h-6 rounded group-hover:scale-110 transition-transform" />
-          <span className="font-mono text-sm font-bold text-text-primary tracking-[0.15em]">
+          <span className="font-mono text-xs sm:text-sm font-bold text-text-primary tracking-[0.15em]">
             CODEISLAND
           </span>
         </a>
 
-        <div className="flex items-center gap-8">
+        <div className="flex items-center gap-3 sm:gap-8">
           <div className="hidden md:flex items-center gap-6 text-sm text-text-muted">
             {[
-              { label: "演示", href: "#demo" },
-              { label: "功能", href: "#features" },
-              { label: "快速上手", href: "#how-it-works" },
-              { label: "GitHub", href: "https://github.com/xmqywx/CodeIsland" },
+              { label: t("nav.demo"), href: "#demo" },
+              { label: t("nav.features"), href: "#features" },
+              { label: t("nav.howItWorks"), href: "#how-it-works" },
+              { label: t("nav.github"), href: "https://github.com/xmqywx/CodeIsland" },
             ].map((item) => (
               <a
                 key={item.label}
@@ -44,12 +46,22 @@ export default function Navbar() {
               </a>
             ))}
           </div>
+
+          {/* Language switcher */}
+          <button
+            onClick={() => setLang(lang === "zh" ? "en" : "zh")}
+            className="flex items-center gap-1 text-xs text-text-muted hover:text-text-primary transition-colors"
+          >
+            <Globe size={14} />
+            <span className="hidden sm:inline">{lang === "zh" ? "EN" : "中文"}</span>
+          </button>
+
           <a
             href="https://github.com/xmqywx/CodeIsland/releases"
-            className="flex items-center gap-2 bg-green/10 text-green border border-green/20 px-4 py-2 rounded-lg text-sm font-medium hover:bg-green/20 hover:border-green/30 transition-all"
+            className="flex items-center gap-1.5 sm:gap-2 bg-green/10 text-green border border-green/20 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium hover:bg-green/20 hover:border-green/30 transition-all"
           >
             <Download size={14} />
-            下载
+            <span className="hidden sm:inline">{t("nav.download")}</span>
           </a>
         </div>
       </div>

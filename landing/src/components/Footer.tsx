@@ -1,4 +1,5 @@
 import { Heart } from "lucide-react"
+import { useI18n } from "../lib/i18n"
 import logo from "../lib/logo"
 
 const GithubIcon = ({ size = 16 }: { size?: number }) => (
@@ -14,27 +15,23 @@ const XIcon = ({ size = 16 }: { size?: number }) => (
 )
 
 export default function Footer() {
+  const { t } = useI18n()
+
   return (
-    <footer className="relative py-10 px-6 border-t border-white/[0.04]">
-      <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-6">
+    <footer className="relative py-8 sm:py-10 px-4 sm:px-6 border-t border-white/[0.04]">
+      <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 sm:gap-6">
         <a href="#" className="flex items-center gap-2">
           <img src={logo} alt="CodeIsland" className="w-5 h-5 rounded" />
           <span className="font-mono text-xs font-bold text-text-muted tracking-[0.15em]">CODEISLAND</span>
           <span className="text-text-muted/40 mx-1">·</span>
           <span className="font-mono text-xs text-text-muted/60">CC BY-NC 4.0</span>
         </a>
-
         <div className="flex items-center gap-5">
-          <a href="https://github.com/xmqywx/CodeIsland" className="text-text-muted hover:text-text-primary transition-colors" aria-label="GitHub">
-            <GithubIcon size={16} />
-          </a>
-          <a href="#" className="text-text-muted hover:text-text-primary transition-colors" aria-label="X">
-            <XIcon size={16} />
-          </a>
+          <a href="https://github.com/xmqywx/CodeIsland" className="text-text-muted hover:text-text-primary transition-colors" aria-label="GitHub"><GithubIcon size={16} /></a>
+          <a href="#" className="text-text-muted hover:text-text-primary transition-colors" aria-label="X"><XIcon size={16} /></a>
         </div>
-
         <p className="flex items-center gap-1.5 text-xs text-text-muted/60">
-          Made with <Heart size={10} className="text-green" /> and Claude Code
+          {t("footer.madeWith")} <Heart size={10} className="text-green" /> and Claude Code
         </p>
       </div>
     </footer>

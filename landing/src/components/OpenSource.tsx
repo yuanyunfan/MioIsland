@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import { GitFork, Star, Heart } from "lucide-react"
+import { useI18n } from "../lib/i18n"
 
 const GithubIcon = ({ size = 16 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
@@ -11,44 +12,26 @@ const REPO = "xmqywx/CodeIsland"
 
 function useGitHubStats() {
   const [stats, setStats] = useState({ stars: 0, forks: 0, contributors: 0 })
-
   useEffect(() => {
-    fetch(`https://api.github.com/repos/${REPO}`)
-      .then(r => r.json())
-      .then(d => {
-        setStats(prev => ({
-          ...prev,
-          stars: d.stargazers_count ?? 0,
-          forks: d.forks_count ?? 0,
-        }))
-      })
-      .catch(() => {})
-
-    fetch(`https://api.github.com/repos/${REPO}/contributors?per_page=100`)
-      .then(r => r.json())
-      .then(d => {
-        if (Array.isArray(d)) {
-          setStats(prev => ({ ...prev, contributors: d.length }))
-        }
-      })
-      .catch(() => {})
+    fetch(`https://api.github.com/repos/${REPO}`).then(r => r.json()).then(d => {
+      setStats(prev => ({ ...prev, stars: d.stargazers_count ?? 0, forks: d.forks_count ?? 0 }))
+    }).catch(() => {})
+    fetch(`https://api.github.com/repos/${REPO}/contributors?per_page=100`).then(r => r.json()).then(d => {
+      if (Array.isArray(d)) setStats(prev => ({ ...prev, contributors: d.length }))
+    }).catch(() => {})
   }, [])
-
   return stats
 }
 
 export default function OpenSource() {
   const { stars, forks, contributors } = useGitHubStats()
+  const { t } = useI18n()
 
   return (
-    <section id="open-source" className="relative py-32 px-6 noise overflow-hidden">
+    <section id="open-source" className="relative py-20 sm:py-32 px-4 sm:px-6 noise overflow-hidden">
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_60%_40%_at_50%_50%,rgba(124,58,237,0.06)_0%,transparent_70%)]" />
-
       <div className="max-w-3xl mx-auto text-center relative z-10">
-        <div
-          style={{ animation: 'heroEnter 0.8s ease-out both' }}
-        >
-          {/* ASCII flag with glow */}
+        <div style={{ animation: 'heroEnter 0.8s ease-out both' }}>
           <pre className="font-mono text-sm text-green leading-snug inline-block mb-8 font-bold glow-green select-none">
 {`   +====+
    | CC |
@@ -56,66 +39,34 @@ export default function OpenSource() {
     |||
 ~~~~|||~~~~`}
           </pre>
-
-          <h2 className="font-display text-4xl sm:text-5xl font-extrabold text-text-primary">
-            开源免费
-          </h2>
-          <p className="text-base text-text-muted mt-4 max-w-lg mx-auto leading-relaxed">
-            CodeIsland 基于 CC BY-NC 4.0 协议开源。个人免费使用，代码透明可审查。
-            <br />
-            和社区一起构建，为社区服务。
-          </p>
+          <h2 className="font-display text-3xl sm:text-4xl sm:text-5xl font-extrabold text-text-primary">{t("os.title")}</h2>
+          <p className="text-sm sm:text-base text-text-muted mt-4 max-w-lg mx-auto leading-relaxed px-4">{t("os.desc")}</p>
         </div>
 
-        {/* Live Stats */}
-        <div
-          style={{ animation: 'heroEnter 0.8s ease-out 0.1s both' }}
-          className="flex justify-center gap-4 mt-10"
-        >
-          <a
-            href={`https://github.com/${REPO}/stargazers`}
-            className="glass rounded-xl px-6 py-3 flex items-center gap-2 transition-all hover:scale-105"
-          >
+        <div style={{ animation: 'heroEnter 0.8s ease-out 0.1s both' }} className="flex flex-wrap justify-center gap-3 sm:gap-4 mt-10">
+          <a href={`https://github.com/${REPO}/stargazers`} className="glass rounded-xl px-4 sm:px-6 py-3 flex items-center gap-2 transition-all hover:scale-105">
             <Star size={14} className="text-amber" />
             <span className="font-mono text-sm text-text-primary font-bold">{stars}</span>
             <span className="font-mono text-xs text-text-muted">Stars</span>
           </a>
-          <a
-            href={`https://github.com/${REPO}/forks`}
-            className="glass rounded-xl px-6 py-3 flex items-center gap-2 transition-all hover:scale-105"
-          >
+          <a href={`https://github.com/${REPO}/forks`} className="glass rounded-xl px-4 sm:px-6 py-3 flex items-center gap-2 transition-all hover:scale-105">
             <GitFork size={14} className="text-purple-light" />
             <span className="font-mono text-sm text-text-primary font-bold">{forks}</span>
             <span className="font-mono text-xs text-text-muted">Forks</span>
           </a>
-          <a
-            href={`https://github.com/${REPO}/graphs/contributors`}
-            className="glass rounded-xl px-6 py-3 flex items-center gap-2 transition-all hover:scale-105"
-          >
+          <a href={`https://github.com/${REPO}/graphs/contributors`} className="glass rounded-xl px-4 sm:px-6 py-3 flex items-center gap-2 transition-all hover:scale-105">
             <Heart size={14} className="text-red-400" />
             <span className="font-mono text-sm text-text-primary font-bold">{contributors}</span>
-            <span className="font-mono text-xs text-text-muted">贡献者</span>
+            <span className="font-mono text-xs text-text-muted">{t("os.contributors")}</span>
           </a>
         </div>
 
-        {/* CTA */}
-        <div
-          style={{ animation: 'heroEnter 0.8s ease-out 0.2s both' }}
-          className="flex flex-wrap justify-center gap-4 mt-10"
-        >
-          <a
-            href={`https://github.com/${REPO}`}
-            className="flex items-center gap-2.5 bg-green text-deep px-8 py-3.5 rounded-xl font-mono text-sm font-bold transition-all duration-300 hover:shadow-[0_0_40px_rgba(52,211,153,0.3)] hover:scale-105"
-          >
-            <GitFork size={16} />
-            Fork & 参与贡献
+        <div style={{ animation: 'heroEnter 0.8s ease-out 0.2s both' }} className="flex flex-col sm:flex-row flex-wrap justify-center gap-3 sm:gap-4 mt-10 px-4 sm:px-0">
+          <a href={`https://github.com/${REPO}`} className="flex items-center justify-center gap-2.5 bg-green text-deep px-8 py-3.5 rounded-xl font-mono text-sm font-bold transition-all duration-300 hover:shadow-[0_0_40px_rgba(52,211,153,0.3)] hover:scale-105">
+            <GitFork size={16} />{t("os.fork")}
           </a>
-          <a
-            href={`https://github.com/${REPO}#readme`}
-            className="flex items-center gap-2.5 glass px-8 py-3.5 rounded-xl font-mono text-sm text-purple-pale transition-all duration-300 hover:scale-105 hover:text-text-primary"
-          >
-            <GithubIcon size={16} />
-            查看文档
+          <a href={`https://github.com/${REPO}#readme`} className="flex items-center justify-center gap-2.5 glass px-8 py-3.5 rounded-xl font-mono text-sm text-purple-pale transition-all duration-300 hover:scale-105 hover:text-text-primary">
+            <GithubIcon size={16} />{t("os.docs")}
           </a>
         </div>
       </div>

@@ -1,6 +1,7 @@
 import { motion } from "motion/react"
 import { Download } from "lucide-react"
 import MacBookMockup from "./MacBookMockup"
+import { useI18n } from "../lib/i18n"
 import logo from "../lib/logo"
 
 const GithubIcon = ({ size = 16 }: { size?: number }) => (
@@ -10,81 +11,53 @@ const GithubIcon = ({ size = 16 }: { size?: number }) => (
 )
 
 export default function Hero() {
+  const { t } = useI18n()
+
   return (
     <section className="relative min-h-[100svh] overflow-hidden noise">
-      {/* Background */}
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_120%_80%_at_50%_-20%,#1a1650_0%,#050510_60%)]" />
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,rgba(124,58,237,0.08)_0%,transparent_50%)]" />
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_80%,rgba(52,211,153,0.04)_0%,transparent_40%)]" />
-      <div
-        className="absolute inset-0 opacity-[0.02]"
-        style={{
-          backgroundImage: 'linear-gradient(rgba(124,58,237,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(124,58,237,0.3) 1px, transparent 1px)',
-          backgroundSize: '60px 60px',
-        }}
-      />
+      <div className="absolute inset-0 opacity-[0.02] hidden sm:block" style={{ backgroundImage: 'linear-gradient(rgba(124,58,237,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(124,58,237,0.3) 1px, transparent 1px)', backgroundSize: '60px 60px' }} />
 
-      {/* Content */}
-      <div className="relative z-10 max-w-6xl mx-auto px-6 pt-28 pb-20">
-        {/* Title block */}
-        <div className="text-center mb-12" style={{ animation: 'heroEnter 1s ease-out both' }}>
-          {/* Logo */}
-          <div className="flex items-center justify-center gap-3 mb-6">
-            <img src={logo} alt="CodeIsland" className="w-10 h-10 rounded-lg" />
+      <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 pt-20 sm:pt-28 pb-12 sm:pb-20">
+        <div className="text-center mb-8 sm:mb-12" style={{ animation: 'heroEnter 1s ease-out both' }}>
+          <div className="flex items-center justify-center gap-3 mb-4 sm:mb-6">
+            <img src={logo} alt="CodeIsland" className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg" />
           </div>
 
-          <h1 className="font-display text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-extrabold tracking-tight leading-[0.95]">
-            <span className="text-text-primary">MacBook 灵动岛</span>
+          <h1 className="font-display text-3xl sm:text-5xl md:text-7xl lg:text-8xl font-extrabold tracking-tight leading-[0.95]">
+            <span className="text-text-primary">{t("hero.title1")}</span>
             <br />
-            <span className="text-text-primary">变身 </span>
-            <span
-              className="text-transparent bg-clip-text"
-              style={{
-                backgroundImage: 'linear-gradient(135deg, #34d399, #6ee7b7, #a78bfa)',
-                backgroundSize: '200% 200%',
-                animation: 'gradient-shift 5s ease-in-out infinite',
-              }}
-            >
-              AI 指挥台
+            <span className="text-text-primary">{t("hero.title2")}</span>
+            <span className="text-transparent bg-clip-text" style={{ backgroundImage: 'linear-gradient(135deg, #34d399, #6ee7b7, #a78bfa)', backgroundSize: '200% 200%', animation: 'gradient-shift 5s ease-in-out infinite' }}>
+              {t("hero.title3")}
             </span>
           </h1>
 
-          <p className="text-base sm:text-lg text-text-muted mt-6 max-w-xl mx-auto leading-relaxed">
-            让你的刘海不再浪费。
-            <br />
-            实时监控 Claude Code 会话、一键审批、秒回终端。
+          <p className="text-sm sm:text-base sm:text-lg text-text-muted mt-4 sm:mt-6 max-w-xl mx-auto leading-relaxed px-4">
+            {t("hero.subtitle1")}<br />{t("hero.subtitle2")}
           </p>
 
-          {/* CTA */}
-          <div className="mt-8 flex flex-wrap gap-4 justify-center" style={{ animation: 'heroEnter 1s ease-out 0.15s both' }}>
-            <a
-              href="https://github.com/xmqywx/CodeIsland/releases"
-              className="group flex items-center gap-2.5 bg-green text-deep px-8 py-3.5 rounded-xl font-mono text-sm font-bold transition-all duration-300 hover:shadow-[0_0_40px_rgba(52,211,153,0.3)] hover:scale-[1.03]"
-            >
+          <div className="mt-6 sm:mt-8 flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center px-4 sm:px-0" style={{ animation: 'heroEnter 1s ease-out 0.15s both' }}>
+            <a href="https://github.com/xmqywx/CodeIsland/releases" className="group flex items-center justify-center gap-2.5 bg-green text-deep px-6 sm:px-8 py-3 sm:py-3.5 rounded-xl font-mono text-sm font-bold transition-all duration-300 hover:shadow-[0_0_40px_rgba(52,211,153,0.3)] hover:scale-[1.03]">
               <Download size={16} />
-              Mac 免费下载
+              {t("hero.download")}
             </a>
-            <a
-              href="https://github.com/xmqywx/CodeIsland"
-              className="group flex items-center gap-2.5 glass px-8 py-3.5 rounded-xl font-mono text-sm text-purple-pale transition-all duration-300 hover:scale-[1.03] hover:text-text-primary"
-            >
+            <a href="https://github.com/xmqywx/CodeIsland" className="group flex items-center justify-center gap-2.5 glass px-6 sm:px-8 py-3 sm:py-3.5 rounded-xl font-mono text-sm text-purple-pale transition-all duration-300 hover:scale-[1.03] hover:text-text-primary">
               <GithubIcon size={16} />
-              GitHub Star
+              {t("hero.star")}
             </a>
           </div>
         </div>
 
-        {/* MacBook Mockup — the hero visual */}
-        <MacBookMockup />
+        {/* MacBook Mockup — hidden on very small screens */}
+        <div className="hidden sm:block">
+          <MacBookMockup />
+        </div>
       </div>
 
-      {/* Scroll indicator */}
-      <motion.div
-        animate={{ y: [0, 8, 0] }}
-        transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
-        className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center gap-1.5 opacity-30"
-        style={{ animation: 'heroEnter 1s ease-out 1.5s both' }}
-      >
+      <motion.div animate={{ y: [0, 8, 0] }} transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }} className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center gap-1.5 opacity-30 hidden sm:flex" style={{ animation: 'heroEnter 1s ease-out 1.5s both' }}>
         <div className="w-px h-6 bg-gradient-to-b from-transparent via-purple-light/30 to-transparent" />
         <span className="font-mono text-[9px] text-purple-light/50 uppercase tracking-[0.2em]">scroll</span>
       </motion.div>
