@@ -158,9 +158,8 @@ CodeIsland auto-detects your terminal from the process tree:
 
 > **macOS Gatekeeper warning:** If you see "Code Island is damaged and can't be opened", run this in Terminal:
 > ```bash
-> xattr -cr /Applications/Code\ Island.app
+> sudo xattr -rd com.apple.quarantine /Applications/Code\ Island.app
 > ```
-> This removes the quarantine flag from the unsigned app.
 
 ### Build from Source
 
