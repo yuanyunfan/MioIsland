@@ -27,6 +27,10 @@ final class MessageRelay {
     /// Map local sessionId → server session id
     private var serverSessionIds: [String: String] = [:]
 
+    /// Track last sent phase per session to avoid duplicate updates
+    private var lastSentPhase: [String: String] = [:]
+    private var lastSentTool: [String: String] = [:]
+
     /// Reverse lookup: server session id → local session id
     func localSessionId(forServerId serverId: String) -> String? {
         return serverSessionIds.first(where: { $0.value == serverId })?.key
@@ -69,6 +73,9 @@ final class MessageRelay {
                 startAliveTimer(for: sessionId)
             }
 
+            // Sync phase changes
+            syncPhaseChange(session)
+
             // Sync new chat items
             syncNewMessages(session)
 
@@ -92,6 +99,65 @@ final class MessageRelay {
             knownSessionIds.remove(id)
             syncedItemCounts.removeValue(forKey: id)
         }
+    }
+
+    // MARK: - Phase Sync
+
+    /// Map session phase + active tool to a phase string for the phone
+    private func mappedPhase(_ session: SessionState) -> (phase: String, toolName: String?) {
+        // Find currently running tool (if any)
+        let runningTool = session.toolTracker.inProgress.values.first?.name
+
+        switch session.phase {
+        case .idle:
+            return ("idle", nil)
+        case .processing:
+            // If a tool is running, show tool_running, otherwise thinking
+            if let tool = runningTool {
+                return ("tool_running", tool)
+            }
+            return ("thinking", nil)
+        case .waitingForApproval(let ctx):
+            return ("waiting_approval", ctx.toolName)
+        case .waitingForInput:
+            return ("idle", nil)
+        case .compacting:
+            return ("thinking", "compacting")
+        case .ended:
+            return ("ended", nil)
+        }
+    }
+
+    private func syncPhaseChange(_ session: SessionState) {
+        let localId = session.sessionId
+        guard let serverId = serverSessionIds[localId], connection.isConnected else { return }
+
+        let mapped = mappedPhase(session)
+        let phase = mapped.phase
+        let tool = mapped.toolName ?? ""
+
+        // Skip if phase + tool unchanged
+        if lastSentPhase[localId] == phase && lastSentTool[localId] == tool {
+            return
+        }
+        lastSentPhase[localId] = phase
+        lastSentTool[localId] = tool
+
+        // Send as a phase update message (special type)
+        let payload: [String: Any] = [
+            "type": "phase",
+            "phase": phase,
+            "toolName": mapped.toolName as Any,
+            "timestamp": Date().timeIntervalSince1970,
+        ]
+
+        guard let data = try? JSONSerialization.data(withJSONObject: payload),
+              let json = String(data: data, encoding: .utf8) else { return }
+
+        // Use a unique localId so it's not deduped
+        let phaseId = "phase-\(localId)-\(Int(Date().timeIntervalSince1970 * 1000))"
+        connection.sendMessage(sessionId: serverId, content: json, localId: phaseId)
+        Self.logger.info("Phase sync: \(localId.prefix(8)) → \(phase) tool=\(tool)")
     }
 
     // MARK: - Message Sync
