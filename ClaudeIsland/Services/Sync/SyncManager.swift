@@ -75,11 +75,10 @@ final class SyncManager: ObservableObject {
     }
 
     private init() {
-        // Default server URL if not configured
-        if serverUrl == nil {
-            UserDefaults.standard.set("https://island.wdao.chat", forKey: "codelight-server-url")
-        }
-        // Auto-connect on startup if configured
+        // No hardcoded server URL on fresh install — the user must configure
+        // their own CodeLight server URL in Settings before pairing. This
+        // avoids accidentally routing every user's sessions through the
+        // author's personal host.
         if let url = serverUrl, !url.isEmpty {
             Task { await connectToServer(url: url) }
         }

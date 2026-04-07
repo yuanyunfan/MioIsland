@@ -32,10 +32,10 @@ struct PairPhoneRow: View {
 
                 if syncManager.isEnabled {
                     HStack(spacing: 3) {
-                        Circle().fill(Color.green).frame(width: 5, height: 5)
+                        Circle().fill(NotchMenuView.brandLime).frame(width: 5, height: 5)
                         Text("Online")
                             .font(.system(size: 9))
-                            .foregroundColor(.green.opacity(0.7))
+                            .foregroundColor(NotchMenuView.brandLime.opacity(0.85))
                     }
                 } else {
                     Image(systemName: "qrcode")
@@ -127,9 +127,22 @@ private struct QRPairingContentView: View {
     @State private var qrImage: NSImage?
     @State private var deviceName = Host.current().localizedName ?? "Mac"
     @State private var isHoveringClose = false
+    @State private var serverDraft = ""
+    @State private var isSavingServer = false
+    /// When true, force the "enter server URL" form even though a URL is
+    /// already configured — user tapped the edit action to change it.
+    @State private var isEditingServer = false
 
-    private var serverUrl: String {
-        SyncManager.shared.serverUrl ?? "https://island.wdao.chat"
+    /// Solid brand fill for the popup card — bold, opaque, always readable.
+    /// Replaces the old ultraThinMaterial which was so transparent the
+    /// window was literally hard to locate against a similar background.
+    private static let cardFill = Color(red: 0xD7/255, green: 0xFE/255, blue: 0x62/255)
+    /// Near-black text that reads comfortably on the lime card.
+    private static let cardText = Color.black
+
+    private var serverUrl: String? {
+        let value = SyncManager.shared.serverUrl?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return (value?.isEmpty ?? true) ? nil : value
     }
 
     private var shortCode: String? {
@@ -146,66 +159,29 @@ private struct QRPairingContentView: View {
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 16))
-                        .foregroundColor(.white.opacity(isHoveringClose ? 0.6 : 0.25))
+                        .foregroundColor(Self.cardText.opacity(isHoveringClose ? 0.8 : 0.5))
                 }
                 .buttonStyle(.plain)
                 .onHover { isHoveringClose = $0 }
             }
             .padding(.bottom, -8)
 
-            // QR Code
-            if let qrImage {
-                Image(nsImage: qrImage)
-                    .interpolation(.none)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 160, height: 160)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                    .padding(12)
-                    .background(
-                        RoundedRectangle(cornerRadius: 14)
-                            .fill(.white)
-                    )
+            if let url = serverUrl, !isEditingServer {
+                pairingContent(serverUrl: url)
             } else {
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(.white.opacity(0.06))
-                    .frame(width: 184, height: 184)
-                    .overlay(ProgressView().tint(.white.opacity(0.4)))
-            }
-
-            // "Scan or enter code"
-            Text("Scan or enter code")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(.white.opacity(0.5))
-
-            // Big short code display
-            Text(shortCode ?? "------")
-                .font(.system(size: 28, weight: .bold, design: .monospaced))
-                .tracking(4)
-                .foregroundColor(.white.opacity(shortCode == nil ? 0.25 : 0.95))
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .background(
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(.white.opacity(0.06))
-                )
-
-            // Info pills
-            HStack(spacing: 8) {
-                infoPill(icon: "link", text: URL(string: serverUrl)?.host ?? serverUrl)
-                infoPill(icon: "desktopcomputer", text: deviceName)
+                notConfiguredContent
             }
         }
         .padding(20)
         .frame(width: 280, height: 460)
         .background(
             RoundedRectangle(cornerRadius: 20)
-                .fill(.ultraThinMaterial)
-                .shadow(color: .black.opacity(0.5), radius: 30, y: 10)
+                .fill(Self.cardFill)
+                .shadow(color: .black.opacity(0.35), radius: 30, y: 10)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 20)
-                .strokeBorder(.white.opacity(0.1), lineWidth: 0.5)
+                .strokeBorder(Self.cardText.opacity(0.1), lineWidth: 0.5)
         )
         .onAppear {
             generateQRCode()
@@ -215,25 +191,221 @@ private struct QRPairingContentView: View {
         }
     }
 
-    private func infoPill(icon: String, text: String) -> some View {
-        HStack(spacing: 3) {
+    // MARK: - Content subviews
+
+    /// Normal paired state: QR, short code, info pills.
+    @ViewBuilder
+    private func pairingContent(serverUrl: String) -> some View {
+        // QR Code — keep a white card background so the generated black
+        // pixels stay crisp and scannable against the lime background.
+        if let qrImage {
+            Image(nsImage: qrImage)
+                .interpolation(.none)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 160, height: 160)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .padding(12)
+                .background(
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(.white)
+                )
+        } else {
+            RoundedRectangle(cornerRadius: 14)
+                .fill(Self.cardText.opacity(0.08))
+                .frame(width: 184, height: 184)
+                .overlay(ProgressView().tint(Self.cardText.opacity(0.45)))
+        }
+
+        // "Scan or enter code"
+        Text("Scan or enter code")
+            .font(.system(size: 12, weight: .medium))
+            .foregroundColor(Self.cardText.opacity(0.6))
+
+        // Big short code display
+        Text(shortCode ?? "------")
+            .font(.system(size: 28, weight: .bold, design: .monospaced))
+            .tracking(4)
+            .foregroundColor(Self.cardText.opacity(shortCode == nil ? 0.3 : 0.95))
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Self.cardText.opacity(0.08))
+            )
+
+        // Info pills — the server pill is clickable to edit.
+        HStack(spacing: 8) {
+            Button {
+                serverDraft = serverUrl
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    isEditingServer = true
+                }
+            } label: {
+                infoPillContent(
+                    icon: "link",
+                    text: URL(string: serverUrl)?.host ?? serverUrl,
+                    trailing: "pencil"
+                )
+            }
+            .buttonStyle(.plain)
+            .help("Change server URL")
+
+            infoPillContent(icon: "desktopcomputer", text: deviceName)
+        }
+    }
+
+    /// Empty state (or edit mode) — lets the user type a server URL inline
+    /// and save it. No separate Settings window needed.
+    @ViewBuilder
+    private var notConfiguredContent: some View {
+        VStack(spacing: 14) {
+            Image(systemName: "server.rack")
+                .font(.system(size: 44, weight: .light))
+                .foregroundColor(Self.cardText.opacity(0.55))
+
+            VStack(spacing: 4) {
+                Text(isEditingServer ? "Change Server" : "CodeLight Server")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(Self.cardText.opacity(0.95))
+                Text(isEditingServer
+                     ? "Enter a new server URL. The current Mac will reconnect after saving."
+                     : "Enter your self-hosted server URL to start pairing.")
+                    .font(.system(size: 11))
+                    .foregroundColor(Self.cardText.opacity(0.6))
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.horizontal, 8)
+
+            TextField("https://your-server.example", text: $serverDraft)
+                .textFieldStyle(.plain)
+                .font(.system(size: 12, design: .monospaced))
+                .foregroundColor(Self.cardText.opacity(0.95))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Self.cardText.opacity(0.1))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .strokeBorder(Self.cardText.opacity(0.25), lineWidth: 0.5)
+                )
+                .padding(.horizontal, 4)
+                .disabled(isSavingServer)
+
+            HStack(spacing: 8) {
+                if isEditingServer {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.18)) {
+                            isEditingServer = false
+                            serverDraft = ""
+                        }
+                    } label: {
+                        Text("Cancel")
+                            .font(.system(size: 12, weight: .semibold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 9)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(Self.cardText.opacity(0.08))
+                            )
+                            .foregroundColor(Self.cardText.opacity(0.7))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .strokeBorder(Self.cardText.opacity(0.2), lineWidth: 0.5)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                Button {
+                    saveServerURL()
+                } label: {
+                    HStack(spacing: 6) {
+                        if isSavingServer {
+                            ProgressView().controlSize(.small).scaleEffect(0.7)
+                        }
+                        Text(isSavingServer ? "Connecting…" : (isEditingServer ? "Save" : "Save and Connect"))
+                            .font(.system(size: 12, weight: .semibold))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 9)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(isValidDraft ? Self.cardText.opacity(0.9) : Self.cardText.opacity(0.15))
+                    )
+                    .foregroundColor(isValidDraft ? Self.cardFill : Self.cardText.opacity(0.5))
+                }
+                .buttonStyle(.plain)
+                .disabled(!isValidDraft || isSavingServer)
+            }
+            .padding(.horizontal, 4)
+
+            Text("This URL is stored locally. It never leaves your Mac.")
+                .font(.system(size: 10))
+                .foregroundColor(Self.cardText.opacity(0.55))
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 16)
+        }
+    }
+
+    private var isValidDraft: Bool {
+        let s = serverDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !s.isEmpty, let u = URL(string: s), let scheme = u.scheme?.lowercased() else { return false }
+        return (scheme == "https" || scheme == "http") && (u.host?.isEmpty == false)
+    }
+
+    private func saveServerURL() {
+        let s = serverDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard isValidDraft else { return }
+        isSavingServer = true
+        SyncManager.shared.serverUrl = s
+        // SyncManager.serverUrl didSet triggers connectToServer automatically,
+        // which populates shortCode + flips isEnabled. The view will re-render
+        // into pairingContent as soon as syncManager publishes the change.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            isSavingServer = false
+            withAnimation(.easeInOut(duration: 0.2)) {
+                isEditingServer = false
+            }
+            serverDraft = ""
+        }
+    }
+
+    /// Info pill rendered in dark-on-lime style, with optional trailing icon
+    /// (used by the server pill to hint it's editable).
+    private func infoPillContent(icon: String, text: String, trailing: String? = nil) -> some View {
+        HStack(spacing: 4) {
             Image(systemName: icon)
                 .font(.system(size: 8))
             Text(text)
                 .font(.system(size: 9))
                 .lineLimit(1)
+            if let trailing {
+                Image(systemName: trailing)
+                    .font(.system(size: 7))
+                    .opacity(0.8)
+            }
         }
-        .foregroundColor(.white.opacity(0.4))
+        .foregroundColor(Self.cardText.opacity(0.7))
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
-        .background(Capsule().fill(.white.opacity(0.06)))
+        .background(Capsule().fill(Self.cardText.opacity(0.1)))
     }
 
     private func generateQRCode() {
+        // No point generating a QR when the host isn't set — the pairing
+        // screen already tells the user to configure one in Settings.
+        guard let url = serverUrl else {
+            qrImage = nil
+            return
+        }
         // New payload format: {server, code}. iPhone parses these and calls
         // POST /v1/pairing/code/redeem.
         let payload: [String: String] = [
-            "server": serverUrl,
+            "server": url,
             "code": shortCode ?? "",
         ]
 
