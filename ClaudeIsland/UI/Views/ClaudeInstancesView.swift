@@ -456,7 +456,13 @@ struct ClaudeInstancesView: View {
     }
 
     private func openChat(_ session: SessionState) {
-        viewModel.showChat(for: session)
+        // If session has AskUserQuestion pending, show the question UI instead of chat
+        if session.pendingToolName == "AskUserQuestion",
+           session.phase.isWaitingForApproval {
+            viewModel.showQuestion(for: session)
+        } else {
+            viewModel.showChat(for: session)
+        }
     }
 
     private func approveSession(_ session: SessionState) {

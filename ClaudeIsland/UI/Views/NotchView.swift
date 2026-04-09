@@ -444,22 +444,11 @@ struct NotchView: View {
                     viewModel: viewModel
                 )
             case .question(let session):
-                if let ctx = session.phase.questionContext {
-                    AskUserQuestionView(
-                        session: session,
-                        context: ctx,
-                        sessionMonitor: sessionMonitor
-                    )
-                } else {
-                    // Session is no longer waiting for a question — fall back to instances
-                    ClaudeInstancesView(
-                        sessionMonitor: sessionMonitor,
-                        viewModel: viewModel
-                    )
-                    .onAppear {
-                        viewModel.contentType = .instances
-                    }
-                }
+                QuestionContentWrapper(
+                    session: session,
+                    sessionMonitor: sessionMonitor,
+                    viewModel: viewModel
+                )
             }
         }
         .frame(width: notchSize.width - 24) // Fixed width to prevent text reflow
@@ -526,6 +515,12 @@ struct NotchView: View {
             } else {
                 DebugLogger.log("Suppress", "[pending] Opening notification")
                 viewModel.notchOpen(reason: .notification)
+                // If the pending session is AskUserQuestion, show the question UI
+                if let askSession = sessions.first(where: {
+                    newPendingIds.contains($0.stableId) && $0.pendingToolName == "AskUserQuestion"
+                }) {
+                    viewModel.showQuestion(for: askSession)
+                }
             }
         }
 
@@ -1195,5 +1190,64 @@ struct ScrollingTextView: View {
         withAnimation(.linear(duration: duration).repeatForever(autoreverses: false)) {
             offset = -textWidth
         }
+    }
+}
+
+// MARK: - Question Content Wrapper
+
+/// Wrapper view that resolves QuestionContext from either .waitingForQuestion
+/// or .waitingForApproval with AskUserQuestion tool, then shows AskUserQuestionView.
+/// Extracted to a separate struct to avoid SwiftUI type-checker complexity in NotchView.
+private struct QuestionContentWrapper: View {
+    let session: SessionState
+    @ObservedObject var sessionMonitor: ClaudeSessionMonitor
+    @ObservedObject var viewModel: NotchViewModel
+
+    var body: some View {
+        let liveSession = sessionMonitor.instances.first(where: { $0.sessionId == session.sessionId }) ?? session
+        if let ctx = Self.questionContext(for: liveSession) {
+            AskUserQuestionView(
+                session: liveSession,
+                context: ctx,
+                sessionMonitor: sessionMonitor
+            )
+        } else {
+            ClaudeInstancesView(
+                sessionMonitor: sessionMonitor,
+                viewModel: viewModel
+            )
+            .onAppear {
+                viewModel.contentType = .instances
+            }
+        }
+    }
+
+    static func questionContext(for session: SessionState) -> QuestionContext? {
+        if let ctx = session.phase.questionContext {
+            return ctx
+        }
+        if let permission = session.activePermission,
+           session.pendingToolName == "AskUserQuestion",
+           let input = permission.toolInput,
+           let questionsRaw = input["questions"]?.value as? [[String: Any]] {
+            let questions = questionsRaw.compactMap { q -> QuestionItem? in
+                guard let question = q["question"] as? String else { return nil }
+                let header = q["header"] as? String
+                let multiSelect = q["multiSelect"] as? Bool ?? false
+                let optionsRaw = q["options"] as? [[String: Any]] ?? []
+                let options = optionsRaw.compactMap { o -> QuestionOption? in
+                    guard let label = o["label"] as? String else { return nil }
+                    return QuestionOption(label: label, description: o["description"] as? String)
+                }
+                return QuestionItem(question: question, header: header, options: options, multiSelect: multiSelect)
+            }
+            guard !questions.isEmpty else { return nil }
+            return QuestionContext(
+                toolUseId: permission.toolUseId,
+                questions: questions,
+                receivedAt: permission.receivedAt
+            )
+        }
+        return nil
     }
 }
