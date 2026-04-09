@@ -199,18 +199,25 @@ struct AskUserQuestionView: View {
         let cwd = session.cwd
         let downPresses = index - 1
 
-        // Send arrow-down (N-1) times
-        for _ in 0..<downPresses {
-            performGhosttyAction("csi:B", cwd: cwd) // CSI B = Arrow Down
+        // Send arrow-down (N-1) times using CSI B
+        for i in 0..<downPresses {
+            let ok = performGhosttyAction("csi:B", cwd: cwd)
+            DebugLogger.log("AskUser", "Arrow down \(i+1): \(ok)")
         }
-        // Small delay between arrows and Enter
-        if downPresses > 0 {
-            try? await Task.sleep(nanoseconds: 50_000_000)
-        }
-        // Press Enter
-        performGhosttyAction("write_stable:\\x0d", cwd: cwd) // CR = Enter
 
-        DebugLogger.log("AskUser", "Sent \(downPresses) arrows + Enter via perform action")
+        if downPresses > 0 {
+            try? await Task.sleep(nanoseconds: 100_000_000)
+        }
+
+        // Press Enter — try multiple formats
+        let enterOk = performGhosttyAction("text:\\r", cwd: cwd)
+        DebugLogger.log("AskUser", "Enter (text:\\r): \(enterOk)")
+
+        if !enterOk {
+            // Fallback: try text:\n
+            let ok2 = performGhosttyAction("text:\\n", cwd: cwd)
+            DebugLogger.log("AskUser", "Enter (text:\\n): \(ok2)")
+        }
     }
 
     private func submitCustomText() {
@@ -221,33 +228,48 @@ struct AskUserQuestionView: View {
         DebugLogger.log("AskUser", "Custom text: \(text)")
         Task {
             let cwd = session.cwd
-            // Navigate to "Type something" option
             for _ in 0..<optionCount {
                 performGhosttyAction("csi:B", cwd: cwd)
             }
-            try? await Task.sleep(nanoseconds: 50_000_000)
-            performGhosttyAction("write_stable:\\x0d", cwd: cwd) // Enter
-            // Wait for text input prompt
+            try? await Task.sleep(nanoseconds: 100_000_000)
+            performGhosttyAction("text:\\r", cwd: cwd)
             try? await Task.sleep(nanoseconds: 500_000_000)
             // Type the custom text + Enter
             let escaped = text.replacingOccurrences(of: "\\", with: "\\\\")
-            performGhosttyAction("write_stable:\(escaped)\\x0d", cwd: cwd)
+                .replacingOccurrences(of: "\"", with: "\\\"")
+            performGhosttyAction("text:\(escaped)\\r", cwd: cwd)
         }
     }
 
     /// Execute a Ghostty action on the cmux terminal matching the session's cwd.
-    /// Uses cmux's `perform action` AppleScript command which sends real
-    /// keyboard events through Ghostty's input system (not paste mode).
     @discardableResult
     private func performGhosttyAction(_ action: String, cwd: String) -> Bool {
-        let escaped = cwd.replacingOccurrences(of: "\"", with: "\\\"")
+        let escapedCwd = cwd.replacingOccurrences(of: "\"", with: "\\\"")
+        // Use osascript with explicit result capture
         let script = """
         tell application "cmux"
-            set targetTerm to (first terminal whose working directory is "\(escaped)")
-            perform action "\(action)" on targetTerm
+            set targetTerm to (first terminal whose working directory is "\(escapedCwd)")
+            set result to (perform action "\(action)" on targetTerm)
+            return result as text
         end tell
         """
-        return runAppleScript(script)
+        let process = Process()
+        let pipe = Pipe()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        process.arguments = ["-e", script]
+        process.standardOutput = pipe
+        process.standardError = FileHandle.nullDevice
+        do {
+            try process.run()
+            process.waitUntilExit()
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            DebugLogger.log("AskUser", "perform action '\(action)' → exit=\(process.terminationStatus) output='\(output)'")
+            return process.terminationStatus == 0 && output == "true"
+        } catch {
+            DebugLogger.log("AskUser", "perform action '\(action)' error: \(error)")
+            return false
+        }
     }
 
     private func runAppleScript(_ script: String) -> Bool {
