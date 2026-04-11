@@ -10,7 +10,7 @@ import Combine
 import Foundation
 import os.log
 
-/// Central state manager for all Claude sessions
+/// Central state manager for all AI agent sessions
 /// Uses Swift actor for thread-safe state mutations
 actor SessionStore {
     static let shared = SessionStore()
@@ -151,28 +151,41 @@ actor SessionStore {
         var session = sessions[sessionId] ?? createSession(from: event)
 
         session.pid = event.pid
-        if event.source == "codex" {
-            // Codex sessions: always set "Codex" as terminal app, skip process tree
-            session.terminalApp = "Codex"
-            if let transcriptPath = event.transcriptPath, !transcriptPath.isEmpty {
-                session.codexTranscriptPath = transcriptPath
+
+        // Provider-specific metadata and terminal app detection
+        if session.providerType.supportsProcessTree {
+            // Claude Code: detect terminal from process tree
+            if let pid = event.pid {
+                let tree = ProcessTreeBuilder.shared.buildTree()
+                session.isInTmux = ProcessTreeBuilder.shared.isInTmux(pid: pid, tree: tree)
+                if session.terminalApp == nil,
+                   let termPid = ProcessTreeBuilder.shared.findTerminalPid(forProcess: pid, tree: tree),
+                   let termInfo = tree[termPid] {
+                    let command = URL(fileURLWithPath: termInfo.command).lastPathComponent
+                    session.terminalApp = TerminalAppRegistry.displayName(for: command)
+                }
+                // Fall back to env-detected terminal hint from hook script
+                if session.terminalApp == nil {
+                    session.terminalApp = event.terminalApp
+                }
+                if isNewSession {
+                    DebugLogger.log("Hook", "pid=\(pid) tmux=\(session.isInTmux) termApp=\(session.terminalApp ?? "nil")")
+                }
             }
-        } else if let pid = event.pid {
-            let tree = ProcessTreeBuilder.shared.buildTree()
-            session.isInTmux = ProcessTreeBuilder.shared.isInTmux(pid: pid, tree: tree)
-            // Detect terminal app name
-            if session.terminalApp == nil,
-               let termPid = ProcessTreeBuilder.shared.findTerminalPid(forProcess: pid, tree: tree),
-               let termInfo = tree[termPid] {
-                let command = URL(fileURLWithPath: termInfo.command).lastPathComponent
-                session.terminalApp = TerminalAppRegistry.displayName(for: command)
-            }
-            // Fall back to env-detected terminal hint from hook script
-            if session.terminalApp == nil {
-                session.terminalApp = event.terminalApp
-            }
-            if isNewSession {
-                DebugLogger.log("Hook", "pid=\(pid) tmux=\(session.isInTmux) termApp=\(session.terminalApp ?? "nil")")
+        } else {
+            // Non-process-tree providers: set terminal app from provider display name
+            switch session.providerType {
+            case .codex:
+                session.terminalApp = "Codex"
+                if let transcriptPath = event.transcriptPath, !transcriptPath.isEmpty {
+                    session.codexTranscriptPath = transcriptPath
+                }
+            case .crush:
+                session.terminalApp = "Crush"
+            case .hermes:
+                session.terminalApp = "Hermes"
+            case .claudeCode:
+                break  // handled above
             }
         }
         if let tty = event.tty {
@@ -216,8 +229,8 @@ actor SessionStore {
         }
 
         // Parse conversationInfo only when needed (not on every event — too expensive for large JSONL)
-        // Skip for Codex sessions — they have no Claude JSONL file
-        if event.source != "codex" &&
+        // Only Claude Code sessions have Claude JSONL files for parsing
+        if session.providerType == .claudeCode &&
            (session.conversationInfo.firstUserMessage == nil ||
            (session.phase == .waitingForInput && session.conversationInfo.lastMessage == nil)) {
             DebugLogger.log("Store", "Parsing conversationInfo for \(sessionId.prefix(8))")
@@ -234,13 +247,20 @@ actor SessionStore {
         sessions[sessionId] = session
         publishState()
 
-        if event.source == "codex" {
+        // Schedule file sync based on provider type
+        switch session.providerType {
+        case .claudeCode:
+            if event.shouldSyncFile {
+                scheduleFileSync(sessionId: sessionId, cwd: event.cwd)
+            }
+        case .codex:
             // Codex: sync chat history from rollout JSONL instead of Claude JSONL
             if let transcriptPath = session.codexTranscriptPath, event.shouldSyncFile {
                 scheduleCodexHistorySync(sessionId: sessionId, transcriptPath: transcriptPath)
             }
-        } else if event.shouldSyncFile {
-            scheduleFileSync(sessionId: sessionId, cwd: event.cwd)
+        case .crush, .hermes:
+            // SSE providers push chat history directly via HookEvent, no file sync needed
+            break
         }
     }
 
@@ -249,6 +269,7 @@ actor SessionStore {
             sessionId: event.sessionId,
             cwd: event.cwd,
             projectName: URL(fileURLWithPath: event.cwd).lastPathComponent,
+            providerType: AgentProviderType.from(source: event.source),
             pid: event.pid,
             tty: event.tty?.replacingOccurrences(of: "/dev/", with: ""),
             isInTmux: false,  // Will be updated
@@ -1011,7 +1032,8 @@ actor SessionStore {
 
     private func loadHistoryFromFile(sessionId: String, cwd: String) async {
         // Codex sessions: parse rollout JSONL instead of Claude JSONL
-        if let transcriptPath = sessions[sessionId]?.codexTranscriptPath, !transcriptPath.isEmpty {
+        if sessions[sessionId]?.providerType == .codex,
+           let transcriptPath = sessions[sessionId]?.codexTranscriptPath, !transcriptPath.isEmpty {
             let messages = CodexChatHistoryParser.parse(transcriptPath: transcriptPath)
             let firstUserMsg = messages.first(where: { $0.role == .user })
             let lastUserMsg = messages.last(where: { $0.role == .user })

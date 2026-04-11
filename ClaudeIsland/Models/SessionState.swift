@@ -2,13 +2,13 @@
 //  SessionState.swift
 //  ClaudeIsland
 //
-//  Unified state model for a Claude session.
+//  Unified state model for an AI agent session.
 //  Consolidates all state that was previously spread across multiple components.
 //
 
 import Foundation
 
-/// Complete state for a single Claude session
+/// Complete state for a single AI agent session
 /// This is the single source of truth - all state reads and writes go through SessionStore
 struct SessionState: Equatable, Identifiable, Sendable {
     // MARK: - Identity
@@ -17,6 +17,14 @@ struct SessionState: Equatable, Identifiable, Sendable {
     let cwd: String
     let projectName: String
 
+    // MARK: - Provider
+
+    /// Which AI agent provider this session belongs to
+    let providerType: AgentProviderType
+
+    /// Provider-specific metadata (e.g., transcript paths, API endpoints)
+    var providerMetadata: [String: String]
+
     // MARK: - Instance Metadata
 
     var pid: Int?
@@ -24,8 +32,12 @@ struct SessionState: Equatable, Identifiable, Sendable {
     var isInTmux: Bool
     /// Detected terminal app name (e.g., "Ghostty", "Warp", "iTerm2", "cmux", "Terminal")
     var terminalApp: String?
-    /// Codex rollout transcript path (non-nil for Codex sessions)
-    var codexTranscriptPath: String?
+
+    /// Codex rollout transcript path — convenience accessor for providerMetadata["transcriptPath"]
+    var codexTranscriptPath: String? {
+        get { providerMetadata["transcriptPath"] }
+        set { providerMetadata["transcriptPath"] = newValue }
+    }
 
     // MARK: - State Machine
 
@@ -72,6 +84,8 @@ struct SessionState: Equatable, Identifiable, Sendable {
         sessionId: String,
         cwd: String,
         projectName: String? = nil,
+        providerType: AgentProviderType = .claudeCode,
+        providerMetadata: [String: String] = [:],
         pid: Int? = nil,
         tty: String? = nil,
         isInTmux: Bool = false,
@@ -91,6 +105,8 @@ struct SessionState: Equatable, Identifiable, Sendable {
         self.sessionId = sessionId
         self.cwd = cwd
         self.projectName = projectName ?? URL(fileURLWithPath: cwd).lastPathComponent
+        self.providerType = providerType
+        self.providerMetadata = providerMetadata
         self.pid = pid
         self.tty = tty
         self.isInTmux = isInTmux

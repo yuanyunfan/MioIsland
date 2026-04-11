@@ -24,7 +24,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             return
         }
 
-        HookInstaller.installIfNeeded()
+        // Register and start all AI agent providers
+        let registry = ProviderRegistry.shared
+        registry.register(ClaudeCodeProvider())
+        registry.register(CodexProvider())
+        registry.register(CrushProvider())
+        registry.register(HermesProvider())
+
+        Task {
+            await registry.startAll()
+        }
 
         // Request notification permission — .accessory policy blocks the system dialog,
         // so temporarily switch to .regular when permission is not yet determined.
@@ -68,6 +77,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        Task {
+            await ProviderRegistry.shared.stopAll()
+        }
         screenObserver = nil
     }
 
