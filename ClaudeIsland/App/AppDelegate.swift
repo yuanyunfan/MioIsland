@@ -59,11 +59,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         // Initialize CodeLight sync (connects to server if configured)
         _ = SyncManager.shared
 
-        // Compute "yesterday" activity report and schedule midnight refresh.
-        // Runs off the main thread inside the collector; launch is instant.
-        Task { @MainActor in
-            AnalyticsCollector.shared.start()
-        }
+        // Stats are now handled by the external stats plugin.
+        // AnalyticsCollector.shared.start() is called by the plugin's activate().
     }
 
     private func handleScreenChange() {

@@ -63,14 +63,7 @@ struct NotchMenuView: View {
         }
         .padding(.top, 20)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        // Recompute the daily report card when the menu is opened — cheap
-        // (memoized inside AnalyticsCollector) and ensures the user sees
-        // the latest "yesterday" without restarting the app.
-        .onChange(of: viewModel.contentType) { _, newValue in
-            if newValue == .menu {
-                Task { await AnalyticsCollector.shared.recomputeIfNeeded() }
-            }
-        }
+        // Stats recompute is handled by the external stats plugin.
     }
 }
 

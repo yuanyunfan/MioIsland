@@ -61,7 +61,6 @@ final class NativePluginManager: ObservableObject {
 
     func loadAll() {
         // Register built-in plugins first
-        registerBuiltIn(StatsPlugin())
         registerBuiltIn(PairPhonePlugin())
 
         let fm = FileManager.default

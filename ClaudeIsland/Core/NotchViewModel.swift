@@ -73,10 +73,8 @@ class NotchViewModel: ObservableObject {
     var screenRect: CGRect { geometry.screenRect }
     var windowHeight: CGFloat { geometry.windowHeight }
 
-    /// Height contributed by the DailyReportCard inside the notch menu.
-    /// DailyReportCard writes this when it hides, shows, or expands — so
-    /// the notch menu can size itself naturally instead of being stuck at
-    /// a fixed 440px with a big empty strip underneath.
+    /// Height contributed by inline report content inside the notch menu.
+    /// Now always `.hidden` since stats moved to an external plugin.
     @Published var dailyReportState: DailyReportState = .hidden
 
     /// Discrete height buckets for the daily report card. Hard-coded
@@ -112,7 +110,7 @@ class NotchViewModel: ObservableObject {
         case .menu:
             // Lean notch menu — now that all the toggles/pickers moved to
             // the floating SystemSettings window, the menu is just:
-            //   DailyReportCard + PairPhoneRow + SystemSettingsRow
+            //   PairPhoneRow + SystemSettingsRow
             // The report card height varies (hidden / loading / collapsed /
             // expanded), so we add its dailyReportState.height onto a small
             // base that covers the header, two rows, and padding.
