@@ -12,10 +12,56 @@ import SwiftUI
 struct PluginHeaderButtons: View {
     let viewModel: NotchViewModel
     @ObservedObject private var manager = NativePluginManager.shared
+    @State private var showOverflow = false
+
+    private let maxVisible = 4
+
+    private var visiblePlugins: [NativePluginManager.LoadedPlugin] {
+        Array(manager.loadedPlugins.prefix(maxVisible))
+    }
+
+    private var overflowPlugins: [NativePluginManager.LoadedPlugin] {
+        Array(manager.loadedPlugins.dropFirst(maxVisible))
+    }
 
     var body: some View {
-        ForEach(manager.loadedPlugins) { plugin in
+        // Visible icons
+        ForEach(visiblePlugins) { plugin in
             PluginHeaderButton(plugin: plugin, viewModel: viewModel)
+        }
+
+        // Overflow "..." button when >4 plugins
+        if !overflowPlugins.isEmpty {
+            HeaderIconButton(icon: "ellipsis", hoverColor: Color(red: 0.6, green: 0.8, blue: 1.0)) {
+                showOverflow.toggle()
+            }
+            .popover(isPresented: $showOverflow, attachmentAnchor: .rect(.bounds), arrowEdge: .trailing) {
+                VStack(spacing: 4) {
+                    ForEach(overflowPlugins) { plugin in
+                        Button {
+                            showOverflow = false
+                            viewModel.showPlugin(plugin.id)
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: plugin.icon)
+                                    .font(.system(size: 11))
+                                    .frame(width: 16)
+                                Text(plugin.name)
+                                    .font(.system(size: 11, weight: .medium))
+                                Spacer()
+                            }
+                            .foregroundColor(.white.opacity(0.8))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(6)
+                .frame(minWidth: 140)
+                .background(Color(white: 0.15))
+            }
         }
     }
 }
@@ -53,9 +99,9 @@ struct HeaderIconButton: View {
         .onHover { hovering in
             isHovered = hovering
             if hovering {
-                NSCursor.pointingHand.push()
+                NSCursor.pointingHand.set()
             } else {
-                NSCursor.pop()
+                NSCursor.arrow.set()
             }
         }
     }

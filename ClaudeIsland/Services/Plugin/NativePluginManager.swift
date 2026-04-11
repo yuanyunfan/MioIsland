@@ -46,7 +46,24 @@ final class NativePluginManager: ObservableObject {
 
     // MARK: - Loading
 
+    /// Register a built-in plugin (lives in the app, not a .bundle).
+    func registerBuiltIn(_ plugin: MioPlugin) {
+        let loaded = LoadedPlugin(
+            id: plugin.id,
+            name: plugin.name,
+            icon: plugin.icon,
+            version: plugin.version,
+            instance: plugin as! NSObject,
+            bundle: Bundle.main
+        )
+        loadedPlugins.append(loaded)
+    }
+
     func loadAll() {
+        // Register built-in plugins first
+        registerBuiltIn(StatsPlugin())
+        registerBuiltIn(PairPhonePlugin())
+
         let fm = FileManager.default
         let dir = pluginsDir
 

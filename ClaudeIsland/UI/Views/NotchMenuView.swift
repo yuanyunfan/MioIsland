@@ -53,26 +53,13 @@ struct NotchMenuView: View {
             .padding(.top, 8)
             .padding(.bottom, 4)
 
-            // Slim notch menu — only frequently-touched and brand surfaces.
-            // All toggles / pickers / accessibility now live in the floating
-            // SystemSettingsWindow opened from the Settings row below.
-            ScrollView(.vertical, showsIndicators: false) {
-                VStack(spacing: 4) {
-                    // Yesterday's activity report. Renders nothing on quiet
-                    // days so the menu stays compact when you didn't work.
-                    DailyReportCard(viewModel: viewModel)
-
-                    // Loaded plugins
-                    ForEach(NativePluginManager.shared.loadedPlugins) { plugin in
-                        PluginMenuRow(plugin: plugin, viewModel: viewModel)
-                    }
-
-                    PairPhoneRow()
-                    SystemSettingsRow()
-                }
-                .padding(.horizontal, 4)
-                .padding(.bottom, 8)
+            // All features are now accessible via header icon buttons.
+            // This menu only shows the settings row as a fallback.
+            VStack(spacing: 4) {
+                SystemSettingsRow()
             }
+            .padding(.horizontal, 4)
+            .padding(.bottom, 8)
         }
         .padding(.top, 20)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)

@@ -39,9 +39,7 @@ struct ClaudeInstancesView: View {
                         PluginHeaderButtons(viewModel: viewModel)
 
                         HeaderIconButton(icon: "gearshape", hoverColor: Color(red: 0xCA/255, green: 0xFF/255, blue: 0x00/255)) {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                viewModel.toggleMenu()
-                            }
+                            SystemSettingsWindow.shared.show()
                         }
                     }
                     .padding(.horizontal, 10)
