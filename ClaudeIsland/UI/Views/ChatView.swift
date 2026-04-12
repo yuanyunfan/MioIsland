@@ -17,6 +17,9 @@ struct ChatView: View {
 
     @State private var inputText: String = ""
     @State private var history: [ChatHistoryItem] = []
+    /// Cached reversed history to avoid creating a new array on every render.
+    /// Updated together with `history` to keep them in sync.
+    @State private var reversedHistory: [ChatHistoryItem] = []
     @State private var session: SessionState
     @State private var isLoading: Bool = true
     @State private var hasLoadedOnce: Bool = false
@@ -39,6 +42,7 @@ struct ChatView: View {
         let cachedHistory = ChatHistoryManager.shared.history(for: sessionId)
         let alreadyLoaded = !cachedHistory.isEmpty
         self._history = State(initialValue: cachedHistory)
+        self._reversedHistory = State(initialValue: cachedHistory.reversed())
         self._isLoading = State(initialValue: !alreadyLoaded)
         self._hasLoadedOnce = State(initialValue: alreadyLoaded)
     }
@@ -113,14 +117,18 @@ struct ChatView: View {
 
             // Check if already loaded (from previous visit)
             if ChatHistoryManager.shared.isLoaded(sessionId: sessionId) {
-                history = ChatHistoryManager.shared.history(for: sessionId)
+                let loaded = ChatHistoryManager.shared.history(for: sessionId)
+                history = loaded
+                reversedHistory = loaded.reversed()
                 isLoading = false
                 return
             }
 
             // Load in background, show loading state
             await ChatHistoryManager.shared.loadFromFile(sessionId: sessionId, cwd: session.cwd)
-            history = ChatHistoryManager.shared.history(for: sessionId)
+            let loaded = ChatHistoryManager.shared.history(for: sessionId)
+            history = loaded
+            reversedHistory = loaded.reversed()
 
             withAnimation(.easeOut(duration: 0.2)) {
                 isLoading = false
@@ -141,7 +149,18 @@ struct ChatView: View {
                         previousHistoryCount = newHistory.count
                     }
 
-                    history = newHistory
+                    // Use explicit withAnimation only when count changes (new message added).
+                    // Content-only updates (tool status changes) are applied without animation
+                    // to avoid triggering expensive layout re-measurement cycles.
+                    if countChanged {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            history = newHistory
+                            reversedHistory = newHistory.reversed()
+                        }
+                    } else {
+                        history = newHistory
+                        reversedHistory = newHistory.reversed()
+                    }
 
                     // Auto-scroll to bottom only if autoscroll is NOT paused
                     if !isAutoscrollPaused && countChanged {
@@ -163,7 +182,15 @@ struct ChatView: View {
                updated != session {
                 // Check if permission was just accepted (transition from waitingForApproval to processing)
                 let wasWaiting = isWaitingForApproval
-                session = updated
+                let phaseChanged = updated.phase != session.phase
+                // Animate only phase transitions (processing indicator show/hide)
+                if phaseChanged {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        session = updated
+                    }
+                } else {
+                    session = updated
+                }
                 let isNowProcessing = updated.phase == .processing
 
                 if wasWaiting && isNowProcessing {
@@ -301,7 +328,7 @@ struct ChatView: View {
                             ))
                     }
 
-                    ForEach(history.reversed()) { item in
+                    ForEach(reversedHistory) { item in
                         MessageItemView(item: item, sessionId: sessionId)
                             .padding(.horizontal, 16)
                             .scaleEffect(x: 1, y: -1)
@@ -313,8 +340,10 @@ struct ChatView: View {
                 }
                 .padding(.top, 20)
                 .padding(.bottom, 20)
-                .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isProcessing)
-                .animation(.spring(response: 0.3, dampingFraction: 0.8), value: history.count)
+                // NOTE: Implicit .animation() modifiers removed here.
+                // They caused an infinite layout loop: every history/isProcessing change
+                // triggered animation → layout re-measurement → state invalidation → repeat.
+                // Animations are now applied explicitly via withAnimation at the call site.
             }
             .scaleEffect(x: 1, y: -1)
             .onScrollGeometryChange(for: Bool.self) { geometry in

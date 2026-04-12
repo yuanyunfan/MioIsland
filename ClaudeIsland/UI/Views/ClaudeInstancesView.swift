@@ -17,6 +17,9 @@ struct ClaudeInstancesView: View {
     @State private var collapsedGroups: Set<String> = []
     /// Whether to show grouped by project or flat list (default: flat)
     @AppStorage("showGroupedSessions") private var showGrouped: Bool = false
+    /// Cached sorted instances, updated only when the source data changes.
+    /// Avoids re-sorting on every SwiftUI body evaluation which destabilizes ForEach identities.
+    @State private var cachedSortedInstances: [SessionState] = []
     @ObservedObject private var buddyReader = BuddyReader.shared
     @State private var showBuddyCard: Bool = false
     @AppStorage("usePixelCat") private var usePixelCat: Bool = false
@@ -96,6 +99,14 @@ struct ClaudeInstancesView: View {
                 viewModel.activeSessionCount = instances.filter {
                     $0.phase != .idle && $0.phase != .ended
                 }.count
+                // Update cached sorted list
+                cachedSortedInstances = computeSortedInstances(from: instances)
+            }
+            .onAppear {
+                // Initialize cache on first appear
+                if cachedSortedInstances.isEmpty && !sessionMonitor.instances.isEmpty {
+                    cachedSortedInstances = computeSortedInstances(from: sessionMonitor.instances)
+                }
             }
         }
     }
@@ -291,7 +302,13 @@ struct ClaudeInstancesView: View {
     /// Secondary sort: by last user message date (stable - doesn't change when agent responds)
     /// Note: approval requests stay in their date-based position to avoid layout shift
     private var sortedInstances: [SessionState] {
-        SessionFilter.filterForDisplay(sessionMonitor.instances)
+        cachedSortedInstances
+    }
+
+    /// Compute the sorted instances list from raw instances.
+    /// Called only when `sessionMonitor.instances` actually changes.
+    private func computeSortedInstances(from instances: [SessionState]) -> [SessionState] {
+        SessionFilter.filterForDisplay(instances)
         .sorted { a, b in
             let priorityA = phasePriority(a.phase)
             let priorityB = phasePriority(b.phase)
@@ -324,7 +341,7 @@ struct ClaudeInstancesView: View {
     private var flatList: some View {
         ScrollView(.vertical, showsIndicators: false) {
             LazyVStack(spacing: 0) {
-                ForEach(Array(sortedInstances.enumerated()), id: \.element.id) { index, session in
+                ForEach(sortedInstances) { session in
                     InstanceRow(
                         session: session,
                         onFocus: { focusSession(session) },
@@ -340,8 +357,8 @@ struct ClaudeInstancesView: View {
                         SubagentListView(session: session)
                     }
 
-                    // Gradient divider between rows
-                    if index < sortedInstances.count - 1 {
+                    // Gradient divider between rows (skip for last item)
+                    if session.id != sortedInstances.last?.id {
                         LinearGradient(
                             colors: [.clear, .white.opacity(0.06), .clear],
                             startPoint: .leading,
