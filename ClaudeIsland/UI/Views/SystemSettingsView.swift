@@ -47,6 +47,7 @@ struct SystemSettingsRow: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
+            .contentShape(Rectangle())
             .background(
                 RoundedRectangle(cornerRadius: 8)
                     .fill(isHovered ? Color.white.opacity(0.08) : Color.clear)
@@ -114,6 +115,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     case appearance
     case notifications
     case behavior
+    case plugins
     case codelight       // Pair iPhone + Launch Presets merged
     case advanced
     case about
@@ -126,6 +128,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .appearance:    return "paintbrush.fill"
         case .notifications: return "bell.badge.fill"
         case .behavior:      return "slider.horizontal.3"
+        case .plugins:       return "puzzlepiece.extension.fill"
         case .codelight:     return "iphone.radiowaves.left.and.right"
         case .advanced:      return "wrench.and.screwdriver.fill"
         case .about:         return "info.circle.fill"
@@ -138,6 +141,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .appearance:    return L10n.tabAppearance
         case .notifications: return L10n.tabNotifications
         case .behavior:      return L10n.tabBehavior
+        case .plugins:       return "Plugins"
         case .codelight:     return L10n.tabCodeLight
         case .advanced:      return L10n.tabAdvanced
         case .about:         return L10n.tabAbout
@@ -286,6 +290,7 @@ private struct SystemSettingsContentView: View {
                 case .appearance:    AppearanceTab()
                 case .notifications: NotificationsTab()
                 case .behavior:      BehaviorTab()
+                case .plugins:       NativePluginStoreView()
                 case .codelight:     CodeLightTab()
                 case .advanced:      AdvancedTab()
                 case .about:         AboutTab()
@@ -380,6 +385,7 @@ private struct TabToggle: View {
 private struct GeneralTab: View {
     @State private var hooksInstalled = HookInstaller.isInstalled()
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
+    @ObservedObject private var codexGate = CodexFeatureGate.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -404,6 +410,9 @@ private struct GeneralTab: View {
                             HookInstaller.installIfNeeded()
                             hooksInstalled = true
                         }
+                    }
+                    TabToggle(icon: "terminal.fill", label: L10n.codexSupport, isOn: codexGate.isEnabled) {
+                        codexGate.isEnabled.toggle()
                     }
                 }
             }
@@ -623,6 +632,43 @@ private struct AboutTab: View {
                         NSWorkspace.shared.open(URL(string: "https://github.com/xmqywx/CodeIsland/issues")!)
                     } label: {
                         aboutLinkButton(icon: "bubble.left", label: L10n.feedback)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            // Plugin marketplace promo card
+            SettingsCard {
+                HStack(spacing: 10) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 16))
+                        .foregroundColor(Color(red: 0xCA/255, green: 0xFF/255, blue: 0x00/255))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(L10n.pluginMarketplaceTitle)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(Theme.detailText.opacity(0.9))
+                        Text(L10n.pluginMarketplaceDesc)
+                            .font(.system(size: 10))
+                            .foregroundColor(Theme.detailText.opacity(0.55))
+                            .lineLimit(2)
+                    }
+                    Spacer()
+                    Button {
+                        NSWorkspace.shared.open(URL(string: "https://miomio.chat/plugins")!)
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(L10n.pluginMarketplaceOpen)
+                                .font(.system(size: 11, weight: .semibold))
+                            Image(systemName: "arrow.up.right")
+                                .font(.system(size: 9, weight: .bold))
+                        }
+                        .foregroundColor(.black)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(Color(red: 0xCA/255, green: 0xFF/255, blue: 0x00/255))
+                        )
                     }
                     .buttonStyle(.plain)
                 }

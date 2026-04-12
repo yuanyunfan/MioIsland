@@ -53,32 +53,56 @@ struct NotchMenuView: View {
             .padding(.top, 8)
             .padding(.bottom, 4)
 
-            // Slim notch menu — only frequently-touched and brand surfaces.
-            // All toggles / pickers / accessibility now live in the floating
-            // SystemSettingsWindow opened from the Settings row below.
-            ScrollView(.vertical, showsIndicators: false) {
-                VStack(spacing: 4) {
-                    // Yesterday's activity report. Renders nothing on quiet
-                    // days so the menu stays compact when you didn't work.
-                    DailyReportCard(viewModel: viewModel)
-
-                    PairPhoneRow()
-                    SystemSettingsRow()
-                }
-                .padding(.horizontal, 4)
-                .padding(.bottom, 8)
+            // All features are now accessible via header icon buttons.
+            // This menu only shows the settings row as a fallback.
+            VStack(spacing: 4) {
+                SystemSettingsRow()
             }
+            .padding(.horizontal, 4)
+            .padding(.bottom, 8)
         }
         .padding(.top, 20)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        // Recompute the daily report card when the menu is opened — cheap
-        // (memoized inside AnalyticsCollector) and ensures the user sees
-        // the latest "yesterday" without restarting the app.
-        .onChange(of: viewModel.contentType) { _, newValue in
-            if newValue == .menu {
-                Task { await AnalyticsCollector.shared.recomputeIfNeeded() }
+        // Stats recompute is handled by the external stats plugin.
+    }
+}
+
+// MARK: - Plugin Menu Row
+
+struct PluginMenuRow: View {
+    let plugin: NativePluginManager.LoadedPlugin
+    let viewModel: NotchViewModel
+    @State private var isHovered = false
+
+    var body: some View {
+        Button {
+            viewModel.showPlugin(plugin.id)
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: plugin.icon)
+                    .font(.system(size: 12))
+                    .opacity(isHovered ? 1 : 0.6)
+                    .frame(width: 16)
+
+                Text(plugin.name)
+                    .font(.system(size: 13, weight: .medium))
+                    .opacity(isHovered ? 1 : 0.7)
+
+                Spacer()
+
+                Text("v\(plugin.version)")
+                    .font(.system(size: 9))
+                    .opacity(0.3)
             }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(isHovered ? Color.white.opacity(0.08) : Color.clear)
+            )
         }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
     }
 }
 

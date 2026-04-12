@@ -64,6 +64,7 @@ enum L10n {
     static var pixelCatMode: String { tr("Pixel Cat Mode", "像素猫模式") }
     static var launchAtLogin: String { tr("Launch at Login", "开机启动") }
     static var hooks: String { tr("Hooks", "钩子") }
+    static var codexSupport: String { tr("Codex Support", "Codex 支持") }
     static var accessibility: String { tr("Accessibility", "辅助功能") }
     static var version: String { tr("Version", "版本") }
     static var quit: String { tr("Quit", "退出") }
@@ -98,6 +99,14 @@ enum L10n {
     static var starOnGitHub: String { tr("Star on GitHub", "GitHub 点星") }
     static var wechatLabel: String { tr("WeChat", "微信") }
     static var maintainedTagline: String { tr("Actively maintained · Your star keeps us going!", "持续更新中 · Star 是我们最大的动力！") }
+
+    // MARK: - Plugin marketplace
+    static var pluginMarketplaceTitle: String { tr("Plugin Marketplace", "插件市场") }
+    static var pluginMarketplaceDesc: String {
+        tr("Discover themes, sounds, companions and utility plugins",
+           "发现主题、音效、伙伴精灵和实用扩展")
+    }
+    static var pluginMarketplaceOpen: String { tr("Browse", "浏览市场") }
 
     // MARK: - Daily report
     static var yesterdayLabel: String { tr("Yesterday", "昨天") }
@@ -296,6 +305,16 @@ enum L10n {
     static var notchThemeCyber: String { tr("Cyber", "赛博") }
     static var notchThemeMint: String { tr("Mint", "薄荷") }
     static var notchThemeSunset: String { tr("Sunset", "日落") }
+    static var notchThemeRosegold: String { tr("Rosé Gold", "玫瑰金") }
+    static var notchThemeOcean: String { tr("Ocean", "深海") }
+    static var notchThemeAurora: String { tr("Aurora", "极光") }
+    static var notchThemeMocha: String { tr("Mocha", "摩卡") }
+    static var notchThemeLavender: String { tr("Lavender", "薰衣草") }
+    static var notchThemeCherry: String { tr("Cherry", "樱桃") }
+    static var notchHoverSpeed: String { tr("Hover Speed", "展开速度") }
+    static var notchHoverInstant: String { tr("Fast", "即时") }
+    static var notchHoverNormal: String { tr("1s", "1秒") }
+    static var notchHoverSlow: String { tr("2s", "2秒") }
     static var notchFontSize: String { tr("Font Size", "字号") }
     static var notchFontSmall: String { tr("S", "小") }
     static var notchFontDefault: String { tr("M", "中") }
@@ -325,6 +344,12 @@ enum L10n {
         case .cyber:    return notchThemeCyber
         case .mint:     return notchThemeMint
         case .sunset:   return notchThemeSunset
+        case .rosegold: return notchThemeRosegold
+        case .ocean:    return notchThemeOcean
+        case .aurora:   return notchThemeAurora
+        case .mocha:    return notchThemeMocha
+        case .lavender: return notchThemeLavender
+        case .cherry:   return notchThemeCherry
         }
     }
 }

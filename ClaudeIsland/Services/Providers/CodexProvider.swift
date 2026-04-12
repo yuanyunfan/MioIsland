@@ -3,7 +3,7 @@
 //  ClaudeIsland
 //
 //  Provider for OpenAI Codex CLI.
-//  Wraps existing CodexHookInstallationManager — installs hooks into ~/.codex/hooks.json.
+//  Uses CodexHookInstaller to install hooks into ~/.codex/hooks.json.
 //  Events arrive via the same HookSocketServer as Claude Code (shared codeisland-state.py script).
 //
 
@@ -18,7 +18,6 @@ final class CodexProvider: AgentProvider, @unchecked Sendable {
     private(set) var isCollecting = false
 
     private let logger = Logger(subsystem: "com.codeisland", category: "CodexProvider")
-    private let installManager = CodexHookInstallationManager()
 
     func detectInstallation() async -> ProviderInstallationStatus {
         let codexDir = FileManager.default.homeDirectoryForCurrentUser
@@ -30,31 +29,19 @@ final class CodexProvider: AgentProvider, @unchecked Sendable {
     }
 
     func startCollecting() async throws {
-        // Get the hook script path from the Claude Code installation
-        let hookScriptPath = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".claude/hooks/codeisland-state.py").path
-
-        guard FileManager.default.fileExists(atPath: hookScriptPath) else {
-            logger.warning("Hook script not found at \(hookScriptPath, privacy: .public), Claude Code provider must start first")
-            return
-        }
-
-        logger.info("Installing Codex hooks")
-        do {
-            try installManager.install(hookScriptPath: hookScriptPath)
-            isCollecting = true
-        } catch {
-            logger.error("Failed to install Codex hooks: \(error.localizedDescription, privacy: .public)")
-            throw error
+        logger.info("Installing Codex hooks via CodexHookInstaller")
+        CodexHookInstaller.installIfNeeded()
+        isCollecting = CodexHookInstaller.isInstalled()
+        if isCollecting {
+            logger.info("Codex hooks installed successfully")
+        } else {
+            logger.warning("Codex hooks installation may have failed")
         }
     }
 
     func stopCollecting() async {
-        do {
-            try installManager.uninstall()
-        } catch {
-            logger.error("Failed to uninstall Codex hooks: \(error.localizedDescription, privacy: .public)")
-        }
+        CodexHookInstaller.uninstall()
         isCollecting = false
+        logger.info("Codex hooks uninstalled")
     }
 }

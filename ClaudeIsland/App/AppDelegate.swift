@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 import UserNotifications
 
-class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
+@MainActor class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     private var windowManager: WindowManager?
     private var screenObserver: ScreenObserver?
 
@@ -62,14 +62,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             self?.handleScreenChange()
         }
 
+        // Load native plugins from ~/.config/codeisland/plugins/
+        NativePluginManager.shared.loadAll()
+
         // Initialize CodeLight sync (connects to server if configured)
         _ = SyncManager.shared
 
-        // Compute "yesterday" activity report and schedule midnight refresh.
-        // Runs off the main thread inside the collector; launch is instant.
-        Task { @MainActor in
-            AnalyticsCollector.shared.start()
-        }
+        // Stats are now handled by the external stats plugin.
+        // AnalyticsCollector.shared.start() is called by the plugin's activate().
     }
 
     private func handleScreenChange() {
@@ -90,6 +90,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
         completionHandler([.banner, .list])
+    }
+
+    private func logHookHealth() {
+        let reports = [HookHealthCheck.checkClaude(), HookHealthCheck.checkCodex()]
+        for report in reports where !report.isHealthy {
+            for issue in report.errors {
+                NSLog("[CodeIsland] Hook health (\(report.agent)): \(issue)")
+            }
+        }
     }
 
     private func ensureSingleInstance() -> Bool {
