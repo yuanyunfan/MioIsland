@@ -28,7 +28,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         let registry = ProviderRegistry.shared
         registry.register(ClaudeCodeProvider())
         registry.register(CodexProvider())
-        registry.register(CrushProvider())
+        registry.register(OpenCodeProvider())
         registry.register(HermesProvider())
 
         Task {

@@ -180,8 +180,8 @@ actor SessionStore {
                 if let transcriptPath = event.transcriptPath, !transcriptPath.isEmpty {
                     session.codexTranscriptPath = transcriptPath
                 }
-            case .crush:
-                session.terminalApp = "Crush"
+            case .opencode:
+                session.terminalApp = "OpenCode"
             case .hermes:
                 session.terminalApp = "Hermes"
             case .claudeCode:
@@ -263,7 +263,7 @@ actor SessionStore {
             if let transcriptPath = session.codexTranscriptPath, event.shouldSyncFile {
                 scheduleCodexHistorySync(sessionId: sessionId, transcriptPath: transcriptPath)
             }
-        case .crush, .hermes:
+        case .opencode, .hermes:
             // SSE providers push chat history directly via HookEvent, no file sync needed
             break
         }
@@ -285,7 +285,7 @@ actor SessionStore {
     // MARK: - Inline Message Processing (for non-file-sync providers)
 
     /// Extract user messages and assistant responses from HookEvent.message field.
-    /// Used by providers like Hermes and Crush that don't have JSONL files.
+    /// Used by providers like Hermes and OpenCode that don't have JSONL files.
     private func processInlineMessages(event: HookEvent, session: inout SessionState) {
         guard let message = event.message, !message.isEmpty else { return }
 

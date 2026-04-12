@@ -12,7 +12,7 @@ import Foundation
 enum AgentProviderType: String, Codable, Sendable, CaseIterable {
     case claudeCode = "claude-code"
     case codex = "codex"
-    case crush = "crush"
+    case opencode = "opencode"
     case hermes = "hermes"
 
     /// User-visible display name
@@ -20,7 +20,7 @@ enum AgentProviderType: String, Codable, Sendable, CaseIterable {
         switch self {
         case .claudeCode: "Claude Code"
         case .codex: "Codex"
-        case .crush: "Crush"
+        case .opencode: "OpenCode"
         case .hermes: "Hermes"
         }
     }
@@ -30,7 +30,7 @@ enum AgentProviderType: String, Codable, Sendable, CaseIterable {
         switch self {
         case .claudeCode: true
         case .codex: true   // Codex uses its own rollout JSONL
-        case .crush: false  // SSE providers push chat history directly
+        case .opencode: false  // Plugin pushes events directly
         case .hermes: false
         }
     }
@@ -40,7 +40,7 @@ enum AgentProviderType: String, Codable, Sendable, CaseIterable {
         switch self {
         case .claudeCode: true
         case .codex: false
-        case .crush: false
+        case .opencode: false
         case .hermes: false
         }
     }
@@ -51,7 +51,7 @@ enum AgentProviderType: String, Codable, Sendable, CaseIterable {
         guard let source else { return .claudeCode }
         switch source {
         case "codex": return .codex
-        case "crush": return .crush
+        case "opencode": return .opencode
         case "hermes": return .hermes
         default: return .claudeCode
         }

@@ -35,6 +35,7 @@ struct TerminalAppRegistry: Sendable {
         "Windsurf",
         "codex",          // Codex CLI
         "crush",          // Crush (formerly OpenCode)
+        "opencode",       // OpenCode
         "hermes",         // Hermes Agent
         "zed",
         "Zellij"
@@ -79,6 +80,7 @@ struct TerminalAppRegistry: Sendable {
             ("zellij", "Zellij"),
             ("codex", "Codex"),      // must be before "code" to avoid VS Code match
             ("crush", "Crush"),      // Crush (formerly OpenCode)
+            ("opencode", "OpenCode"), // OpenCode
             ("hermes", "Hermes"),    // Hermes Agent
             ("electron", "VS Code"), // VS Code binary name as seen in ps on macOS
             ("code", "VS Code"),
