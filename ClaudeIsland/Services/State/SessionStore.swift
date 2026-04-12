@@ -224,6 +224,11 @@ actor SessionStore {
         processToolTracking(event: event, session: &session)
         processSubagentTracking(event: event, session: &session)
 
+        // For providers without file-based chat sync, extract messages from HookEvent directly
+        if !session.providerType.usesFileSync {
+            processInlineMessages(event: event, session: &session)
+        }
+
         if event.event == "Stop" {
             session.subagentState = SubagentState()
         }
@@ -275,6 +280,62 @@ actor SessionStore {
             isInTmux: false,  // Will be updated
             phase: .idle
         )
+    }
+
+    // MARK: - Inline Message Processing (for non-file-sync providers)
+
+    /// Extract user messages and assistant responses from HookEvent.message field.
+    /// Used by providers like Hermes and Crush that don't have JSONL files.
+    private func processInlineMessages(event: HookEvent, session: inout SessionState) {
+        guard let message = event.message, !message.isEmpty else { return }
+
+        let itemId = "\(event.sessionId)-\(event.event)-\(Int(Date().timeIntervalSince1970 * 1000))"
+
+        switch event.event {
+        case "UserPromptSubmit":
+            // User message
+            let item = ChatHistoryItem(id: itemId, type: .user(message), timestamp: Date())
+            session.chatItems.append(item)
+            // Update conversationInfo
+            if session.conversationInfo.firstUserMessage == nil {
+                session.conversationInfo = ConversationInfo(
+                    summary: nil,
+                    lastMessage: message,
+                    lastMessageRole: "user",
+                    lastToolName: nil,
+                    firstUserMessage: message,
+                    latestUserMessage: message,
+                    lastUserMessageDate: Date()
+                )
+            } else {
+                session.conversationInfo = ConversationInfo(
+                    summary: session.conversationInfo.summary,
+                    lastMessage: message,
+                    lastMessageRole: "user",
+                    lastToolName: session.conversationInfo.lastToolName,
+                    firstUserMessage: session.conversationInfo.firstUserMessage,
+                    latestUserMessage: message,
+                    lastUserMessageDate: Date()
+                )
+            }
+
+        case "Stop":
+            // Assistant response
+            let item = ChatHistoryItem(id: itemId, type: .assistant(message), timestamp: Date())
+            session.chatItems.append(item)
+            session.conversationInfo = ConversationInfo(
+                summary: session.conversationInfo.summary,
+                lastMessage: message,
+                lastMessageRole: "assistant",
+                lastToolName: session.conversationInfo.lastToolName,
+                firstUserMessage: session.conversationInfo.firstUserMessage,
+                latestUserMessage: session.conversationInfo.latestUserMessage,
+                lastUserMessageDate: session.conversationInfo.lastUserMessageDate
+            )
+
+        default:
+            break
+        }
     }
 
     private func processToolTracking(event: HookEvent, session: inout SessionState) {

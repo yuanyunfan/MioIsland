@@ -80,6 +80,7 @@ final class HermesProvider: AgentProvider, @unchecked Sendable {
         import socket
         import os
         import time
+        import uuid
 
         SOCKET_PATH = "/tmp/codeisland.sock"
 
@@ -92,6 +93,17 @@ final class HermesProvider: AgentProvider, @unchecked Sendable {
         }
 
 
+        def _send(state):
+            try:
+                sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                sock.settimeout(2)
+                sock.connect(SOCKET_PATH)
+                sock.sendall(json.dumps(state).encode("utf-8"))
+                sock.close()
+            except Exception:
+                pass
+
+
         async def handle(event_type, context):
             mapped = EVENT_MAP.get(event_type)
             if not mapped:
@@ -100,13 +112,20 @@ final class HermesProvider: AgentProvider, @unchecked Sendable {
             event_name, status = mapped
 
             session_id = context.get("session_id") or f"hermes-{os.getpid()}-{int(time.time())}"
-            cwd = context.get("cwd") or os.getcwd()
+            cwd = context.get("cwd") or os.environ.get("MESSAGING_CWD") or os.getcwd()
 
             tool_name = None
+            tool_input = None
             if event_type == "agent:step":
                 tool_names = context.get("tool_names", [])
+                tools = context.get("tools", [])
                 if tool_names:
                     tool_name = tool_names[0]
+                # Extract tool input/result for richer display
+                if tools and isinstance(tools[0], dict):
+                    result = tools[0].get("result", "")
+                    if result:
+                        tool_input = {"result": str(result)[:500]}
 
             state = {
                 "session_id": session_id,
@@ -115,20 +134,15 @@ final class HermesProvider: AgentProvider, @unchecked Sendable {
                 "status": status,
                 "source": "hermes",
                 "tool": tool_name,
-                "tool_input": None,
-                "tool_use_id": None,
+                "tool_input": tool_input,
+                "tool_use_id": str(uuid.uuid4())[:12] if tool_name else None,
                 "pid": None,
                 "tty": None,
+                "message": context.get("message", "")[:500] if event_type == "agent:start" else
+                           context.get("response", "")[:500] if event_type == "agent:end" else None,
             }
 
-            try:
-                sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-                sock.settimeout(2)
-                sock.connect(SOCKET_PATH)
-                sock.sendall(json.dumps(state).encode("utf-8"))
-                sock.close()
-            except Exception:
-                pass  # Don't block agent on monitoring failures
+            _send(state)
         """
         try handler.write(
             to: hookDir.appendingPathComponent("handler.py"),
