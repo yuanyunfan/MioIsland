@@ -82,7 +82,15 @@ final class OpenCodeProvider: AgentProvider, @unchecked Sendable {
 
         export const MioIslandPlugin = async ({ project, directory }) => {
           const cwd = directory || process.cwd()
-          let currentSessionId = null
+          // Stable session ID: use process PID so all events from the same
+          // OpenCode instance map to one MioIsland session
+          const stableId = `opencode-${process.pid}`
+          let currentSessionId = stableId
+
+          function sid(hint) {
+            if (hint) { currentSessionId = hint }
+            return currentSessionId || stableId
+          }
 
           return {
             event: async ({ event }) => {
@@ -90,9 +98,9 @@ final class OpenCodeProvider: AgentProvider, @unchecked Sendable {
               const props = event.properties || {}
 
               if (type === "session.created") {
-                currentSessionId = props.info?.id || null
+                sid(props.info?.id)
                 send({
-                  session_id: currentSessionId || `opencode-${Date.now()}`,
+                  session_id: sid(),
                   cwd,
                   event: "SessionStart",
                   status: "waiting_for_input",
@@ -106,12 +114,11 @@ final class OpenCodeProvider: AgentProvider, @unchecked Sendable {
               }
 
               if (type === "session.status") {
-                const sid = props.sessionID || currentSessionId || `opencode-${Date.now()}`
-                currentSessionId = sid
+                sid(props.sessionID)
                 const status = props.status
                 if (status?.type === "busy") {
                   send({
-                    session_id: sid,
+                    session_id: sid(),
                     cwd,
                     event: "UserPromptSubmit",
                     status: "processing",
@@ -126,9 +133,9 @@ final class OpenCodeProvider: AgentProvider, @unchecked Sendable {
               }
 
               if (type === "session.idle") {
-                const sid = props.sessionID || currentSessionId || `opencode-${Date.now()}`
+                sid(props.sessionID)
                 send({
-                  session_id: sid,
+                  session_id: sid(),
                   cwd,
                   event: "Stop",
                   status: "waiting_for_input",
@@ -142,27 +149,24 @@ final class OpenCodeProvider: AgentProvider, @unchecked Sendable {
               }
 
               if (type === "session.deleted") {
-                const sid = props.info?.id || currentSessionId
-                if (sid) {
-                  send({
-                    session_id: sid,
-                    cwd,
-                    event: "SessionEnd",
-                    status: "ended",
-                    source: "opencode",
-                    tool: null,
-                    tool_input: null,
-                    tool_use_id: null,
-                    pid: process.pid,
-                    tty: null,
-                  })
-                }
+                const deletedId = props.info?.id || sid()
+                send({
+                  session_id: deletedId,
+                  cwd,
+                  event: "SessionEnd",
+                  status: "ended",
+                  source: "opencode",
+                  tool: null,
+                  tool_input: null,
+                  tool_use_id: null,
+                  pid: process.pid,
+                  tty: null,
+                })
               }
 
               if (type === "permission.updated") {
-                const sid = currentSessionId || `opencode-${Date.now()}`
                 send({
-                  session_id: sid,
+                  session_id: sid(),
                   cwd,
                   event: "PermissionRequest",
                   status: "waiting_for_approval",
@@ -177,9 +181,9 @@ final class OpenCodeProvider: AgentProvider, @unchecked Sendable {
             },
 
             "tool.execute.before": async (input, output) => {
-              const sid = input.sessionID || currentSessionId || `opencode-${Date.now()}`
+              sid(input.sessionID)
               send({
-                session_id: sid,
+                session_id: sid(),
                 cwd,
                 event: "PreToolUse",
                 status: "running_tool",
@@ -193,9 +197,9 @@ final class OpenCodeProvider: AgentProvider, @unchecked Sendable {
             },
 
             "tool.execute.after": async (input, output) => {
-              const sid = input.sessionID || currentSessionId || `opencode-${Date.now()}`
+              sid(input.sessionID)
               send({
-                session_id: sid,
+                session_id: sid(),
                 cwd,
                 event: "PostToolUse",
                 status: "processing",
@@ -209,7 +213,7 @@ final class OpenCodeProvider: AgentProvider, @unchecked Sendable {
             },
 
             "chat.message": async (input, output) => {
-              const sid = input.sessionID || currentSessionId || `opencode-${Date.now()}`
+              sid(input.sessionID)
               const text = output.parts
                 ?.filter(p => p.type === "text")
                 .map(p => p.text)
@@ -217,7 +221,7 @@ final class OpenCodeProvider: AgentProvider, @unchecked Sendable {
                 .substring(0, 500)
               if (text) {
                 send({
-                  session_id: sid,
+                  session_id: sid(),
                   cwd,
                   event: "UserPromptSubmit",
                   status: "processing",
