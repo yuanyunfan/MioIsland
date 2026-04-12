@@ -302,6 +302,11 @@ struct ToolStatusDisplay {
         case "ExitPlanMode":
             return ToolStatusDisplay(text: "Exiting plan mode...", isRunning: true)
         default:
+            // For unknown tools (e.g. Hermes "terminal", "read_file"),
+            // show description if available
+            if let desc = input["description"], !desc.isEmpty {
+                return ToolStatusDisplay(text: desc, isRunning: true)
+            }
             return ToolStatusDisplay(text: "Running...", isRunning: true)
         }
     }

@@ -93,6 +93,26 @@ final class HermesProvider: AgentProvider, @unchecked Sendable {
         }
 
 
+        def _extract_description(tool_name, result):
+            data = result
+            if isinstance(result, str):
+                try:
+                    data = json.loads(result)
+                except (json.JSONDecodeError, TypeError):
+                    first_line = result.strip().split("\\n")[0]
+                    return first_line[:120]
+            if isinstance(data, dict):
+                output = data.get("output", "")
+                if output:
+                    first_line = str(output).strip().split("\\n")[0]
+                    return first_line[:120]
+                error = data.get("error")
+                if error:
+                    return f"Error: {str(error)[:100]}"
+                return str(data)[:120]
+            return str(result)[:120]
+
+
         def _send(state):
             try:
                 sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -121,23 +141,16 @@ final class HermesProvider: AgentProvider, @unchecked Sendable {
                 tools = context.get("tools", [])
                 if tool_names:
                     tool_name = tool_names[0]
-                # Extract tool input parameters for richer display
+                # Hermes prev_tools: [{"name": "terminal", "result": "..."}]
+                # No "input" field — extract clean description from result.
                 if tools and isinstance(tools[0], dict):
                     tool_data = tools[0]
-                    tool_input = {}
-                    # Extract input parameters (command, file_path, pattern, etc.)
-                    inp = tool_data.get("input", {})
-                    if isinstance(inp, dict):
-                        for k in ("command", "description", "file_path", "path",
-                                  "pattern", "query", "url", "content", "old_string",
-                                  "new_string", "skill"):
-                            v = inp.get(k)
-                            if v:
-                                tool_input[k] = str(v)[:500]
-                    # Also include result if available (for completed tools)
                     result = tool_data.get("result", "")
                     if result:
-                        tool_input["result"] = str(result)[:500]
+                        desc = _extract_description(tool_name, result)
+                        tool_input = {"description": desc}
+                    else:
+                        tool_input = {"description": tool_name or "Running"}
 
             state = {
                 "session_id": session_id,
