@@ -121,11 +121,23 @@ final class HermesProvider: AgentProvider, @unchecked Sendable {
                 tools = context.get("tools", [])
                 if tool_names:
                     tool_name = tool_names[0]
-                # Extract tool input/result for richer display
+                # Extract tool input parameters for richer display
                 if tools and isinstance(tools[0], dict):
-                    result = tools[0].get("result", "")
+                    tool_data = tools[0]
+                    tool_input = {}
+                    # Extract input parameters (command, file_path, pattern, etc.)
+                    inp = tool_data.get("input", {})
+                    if isinstance(inp, dict):
+                        for k in ("command", "description", "file_path", "path",
+                                  "pattern", "query", "url", "content", "old_string",
+                                  "new_string", "skill"):
+                            v = inp.get(k)
+                            if v:
+                                tool_input[k] = str(v)[:500]
+                    # Also include result if available (for completed tools)
+                    result = tool_data.get("result", "")
                     if result:
-                        tool_input = {"result": str(result)[:500]}
+                        tool_input["result"] = str(result)[:500]
 
             state = {
                 "session_id": session_id,

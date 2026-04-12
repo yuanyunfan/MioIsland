@@ -94,7 +94,7 @@ struct ChatView: View {
                                 removal: .opacity
                             ))
                     }
-                } else if session.phase != .ended {
+                } else if session.phase != .ended && session.providerType.hasLocalTerminal {
                     goToTerminalBar
                         .transition(.opacity)
                 }

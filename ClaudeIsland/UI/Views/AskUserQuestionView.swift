@@ -93,10 +93,12 @@ struct AskUserQuestionView: View {
                 .padding(.bottom, 4)
             }
 
-            // Jump to terminal — always at bottom
-            jumpToTerminalButton
-                .padding(.horizontal, 12)
-                .padding(.bottom, 8)
+            // Jump to terminal — only for providers with a local terminal
+            if session.providerType.hasLocalTerminal {
+                jumpToTerminalButton
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 8)
+            }
         }
         // Reset state when a new question arrives (different toolUseId)
         .onChange(of: context.toolUseId) { _ in

@@ -45,6 +45,16 @@ enum AgentProviderType: String, Codable, Sendable, CaseIterable {
         }
     }
 
+    /// Whether this provider runs in a local terminal (vs. remote/Discord/web)
+    var hasLocalTerminal: Bool {
+        switch self {
+        case .claudeCode: true
+        case .codex: true
+        case .opencode: true
+        case .hermes: false  // Hermes runs via Discord, no local terminal
+        }
+    }
+
     /// Infer provider type from HookEvent.source field
     /// Maintains backward compatibility: source==nil → claudeCode, source=="codex" → codex
     static func from(source: String?) -> AgentProviderType {
