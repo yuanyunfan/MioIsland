@@ -28,6 +28,7 @@ enum NotchContentType: Equatable {
     case menu
     case chat(SessionState)
     case question(SessionState)
+    case plugin(String)  // plugin ID
 
     var id: String {
         switch self {
@@ -35,6 +36,7 @@ enum NotchContentType: Equatable {
         case .menu: return "menu"
         case .chat(let session): return "chat-\(session.sessionId)"
         case .question(let session): return "question-\(session.sessionId)"
+        case .plugin(let pluginId): return "plugin-\(pluginId)"
         }
     }
 }
@@ -71,10 +73,8 @@ class NotchViewModel: ObservableObject {
     var screenRect: CGRect { geometry.screenRect }
     var windowHeight: CGFloat { geometry.windowHeight }
 
-    /// Height contributed by the DailyReportCard inside the notch menu.
-    /// DailyReportCard writes this when it hides, shows, or expands — so
-    /// the notch menu can size itself naturally instead of being stuck at
-    /// a fixed 440px with a big empty strip underneath.
+    /// Height contributed by inline report content inside the notch menu.
+    /// Now always `.hidden` since stats moved to an external plugin.
     @Published var dailyReportState: DailyReportState = .hidden
 
     /// Discrete height buckets for the daily report card. Hard-coded
@@ -110,7 +110,7 @@ class NotchViewModel: ObservableObject {
         case .menu:
             // Lean notch menu — now that all the toggles/pickers moved to
             // the floating SystemSettings window, the menu is just:
-            //   DailyReportCard + PairPhoneRow + SystemSettingsRow
+            //   PairPhoneRow + SystemSettingsRow
             // The report card height varies (hidden / loading / collapsed /
             // expanded), so we add its dailyReportState.height onto a small
             // base that covers the header, two rows, and padding.
@@ -124,6 +124,11 @@ class NotchViewModel: ObservableObject {
             return CGSize(
                 width: min(screenRect.width * 0.4, 480),
                 height: 320
+            )
+        case .plugin:
+            return CGSize(
+                width: min(screenRect.width * 0.4, 480),
+                height: 300
             )
         case .instances:
             let baseHeight: CGFloat = 100
@@ -168,6 +173,15 @@ class NotchViewModel: ObservableObject {
         self.hasPhysicalNotch = hasPhysicalNotch
         setupEventHandlers()
         observeSelectors()
+
+        // Listen for plugin open requests (from plugin header buttons etc.)
+        NotificationCenter.default.addObserver(forName: NSNotification.Name("com.codeisland.openPlugin"), object: nil, queue: .main) { [weak self] notification in
+            guard let pluginId = notification.userInfo?["pluginId"] as? String else { return }
+            Task { @MainActor in
+                self?.notchOpen(reason: .hover)
+                self?.showPlugin(pluginId)
+            }
+        }
     }
 
     private func observeSelectors() {
@@ -381,6 +395,10 @@ class NotchViewModel: ObservableObject {
 
     func toggleMenu() {
         contentType = contentType == .menu ? .instances : .menu
+    }
+
+    func showPlugin(_ pluginId: String) {
+        contentType = .plugin(pluginId)
     }
 
     func showChat(for session: SessionState) {

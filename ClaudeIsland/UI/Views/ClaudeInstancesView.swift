@@ -34,18 +34,13 @@ struct ClaudeInstancesView: View {
                             .notchFont(11)
                             .notchSecondaryForeground()
                         Spacer()
-                        Button {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                viewModel.toggleMenu()
-                            }
-                        } label: {
-                            Image(systemName: "gearshape")
-                                .notchFont(10)
-                                .notchSecondaryForeground()
-                                .frame(width: 24, height: 24)
-                                .contentShape(Rectangle())
+
+                        // Plugin header buttons
+                        PluginHeaderButtons(viewModel: viewModel)
+
+                        HeaderIconButton(icon: "gearshape", hoverColor: Color(red: 0xCA/255, green: 0xFF/255, blue: 0x00/255)) {
+                            SystemSettingsWindow.shared.show()
                         }
-                        .buttonStyle(.plain)
                     }
                     .padding(.horizontal, 10)
                     .padding(.top, 6)
@@ -198,6 +193,10 @@ struct ClaudeInstancesView: View {
             // Top bar with settings
             HStack {
                 Spacer()
+
+                // Plugin header buttons
+                PluginHeaderButtons(viewModel: viewModel)
+
                 Button {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                         viewModel.toggleMenu()
