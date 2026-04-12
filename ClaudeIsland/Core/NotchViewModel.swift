@@ -127,8 +127,8 @@ class NotchViewModel: ObservableObject {
             )
         case .plugin:
             return CGSize(
-                width: min(screenRect.width * 0.4, 480),
-                height: 300
+                width: min(screenRect.width * 0.48, 620),
+                height: min(screenRect.height * 0.78, 780)
             )
         case .instances:
             let baseHeight: CGFloat = 100

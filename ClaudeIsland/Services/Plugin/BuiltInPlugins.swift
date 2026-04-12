@@ -2,9 +2,10 @@
 //  BuiltInPlugins.swift
 //  ClaudeIsland
 //
-//  Built-in "plugins" that wrap existing features as plugin entries.
-//  They register with NativePluginManager so they appear in the
-//  header icon bar like any other plugin.
+//  Built-in "official" plugins that ship with the app. Users can
+//  disable them (which hides them from the header) but the slot
+//  stays visible in System Settings > Plugins so they can be
+//  reinstalled with one click.
 //
 
 import AppKit
@@ -23,7 +24,6 @@ final class PairPhonePlugin: NSObject, MioPlugin {
     func deactivate() {}
 
     func makeView() -> NSView {
-        // Opens pairing window; the view itself is minimal
         NSHostingView(rootView: PairPhonePluginView())
     }
 }
@@ -63,5 +63,50 @@ private struct PairPhonePluginView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 20)
+    }
+}
+
+// MARK: - Official Plugin Registry
+
+/// Metadata for official plugins that ship with the app.
+/// These always appear in the Plugins settings page, even when
+/// disabled, so users can re-enable them with one click.
+///
+/// Two kinds of officials:
+///   - Swift built-ins: factory creates the instance directly (e.g. Pair iPhone)
+///   - Bundle-based: factory is nil; the plugin is shipped as a .bundle loaded
+///     from disk. When disabled the slot stays; reinstall reloads from disk.
+struct OfficialPluginInfo {
+    let id: String
+    let name: String
+    let icon: String
+    let version: String
+    let factory: (() -> MioPlugin)?
+}
+
+enum OfficialPlugins {
+    static let all: [OfficialPluginInfo] = [
+        OfficialPluginInfo(
+            id: "pair-phone",
+            name: "Pair iPhone",
+            icon: "iphone",
+            version: "1.0.0",
+            factory: { PairPhonePlugin() }
+        ),
+        // Stats is shipped as a .bundle plugin (source in mio-plugin-stats).
+        // It lives in ~/.config/codeisland/plugins/stats.bundle after install.
+        OfficialPluginInfo(
+            id: "stats",
+            name: "Stats",
+            icon: "chart.bar.fill",
+            version: "1.0.0",
+            factory: nil
+        ),
+    ]
+
+    static let ids: Set<String> = Set(all.map { $0.id })
+
+    static func info(id: String) -> OfficialPluginInfo? {
+        all.first { $0.id == id }
     }
 }

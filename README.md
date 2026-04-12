@@ -272,6 +272,25 @@ A Mac can be paired with multiple iPhones simultaneously — they all share the 
 
 </details>
 
+## 🪄 Plugin Marketplace
+
+MioIsland now ships with a **plugin system** and a companion marketplace at **[miomio.chat](https://miomio.chat/plugins)** where you can browse and install third-party plugins for your notch — themes, ambient sounds, animated companions, and utility extensions like the bundled Stats and Music Player.
+
+<div align="center">
+  <img src="docs/screenshots/plugins-settings-en.png" width="720" alt="Plugin settings (English)" />
+</div>
+
+**How to install**:
+
+1. Open **System Settings → Plugins** inside MioIsland
+2. Visit [miomio.chat/plugins](https://miomio.chat/plugins), pick a plugin, click *Install*
+3. Copy the generated URL and paste it into the **Install from URL** field
+4. Click *Install* — MioIsland downloads, verifies and loads it automatically
+
+Official plugins (Pair iPhone, Stats) always stay in the list even if you remove them, so you can re-enable them with one click. All plugins are manually reviewed for security before they reach the marketplace.
+
+If you're a developer, head to the [developer portal](https://miomio.chat/developer) to submit your own plugin. Source code is mirrored to a private Gitea instance for review; approved plugins become downloadable to all users.
+
 ## Settings
 
 | Setting | Description |

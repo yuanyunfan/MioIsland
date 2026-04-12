@@ -632,6 +632,43 @@ private struct AboutTab: View {
                 }
             }
 
+            // Plugin marketplace promo card
+            SettingsCard {
+                HStack(spacing: 10) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 16))
+                        .foregroundColor(Color(red: 0xCA/255, green: 0xFF/255, blue: 0x00/255))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(L10n.pluginMarketplaceTitle)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(Theme.detailText.opacity(0.9))
+                        Text(L10n.pluginMarketplaceDesc)
+                            .font(.system(size: 10))
+                            .foregroundColor(Theme.detailText.opacity(0.55))
+                            .lineLimit(2)
+                    }
+                    Spacer()
+                    Button {
+                        NSWorkspace.shared.open(URL(string: "https://miomio.chat/plugins")!)
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(L10n.pluginMarketplaceOpen)
+                                .font(.system(size: 11, weight: .semibold))
+                            Image(systemName: "arrow.up.right")
+                                .font(.system(size: 9, weight: .bold))
+                        }
+                        .foregroundColor(.black)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(Color(red: 0xCA/255, green: 0xFF/255, blue: 0x00/255))
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
             SettingsCard {
                 HStack {
                     Image(systemName: "message.fill")

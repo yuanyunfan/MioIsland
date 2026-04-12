@@ -99,6 +99,14 @@ enum L10n {
     static var wechatLabel: String { tr("WeChat", "微信") }
     static var maintainedTagline: String { tr("Actively maintained · Your star keeps us going!", "持续更新中 · Star 是我们最大的动力！") }
 
+    // MARK: - Plugin marketplace
+    static var pluginMarketplaceTitle: String { tr("Plugin Marketplace", "插件市场") }
+    static var pluginMarketplaceDesc: String {
+        tr("Discover themes, sounds, companions and utility plugins",
+           "发现主题、音效、伙伴精灵和实用扩展")
+    }
+    static var pluginMarketplaceOpen: String { tr("Browse", "浏览市场") }
+
     // MARK: - Daily report
     static var yesterdayLabel: String { tr("Yesterday", "昨天") }
     static var turnsLabel: String { tr("Turns", "轮次") }
