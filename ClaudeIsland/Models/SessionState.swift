@@ -24,6 +24,12 @@ struct SessionState: Equatable, Identifiable, Sendable {
     var isInTmux: Bool
     /// Detected terminal app name (e.g., "Ghostty", "Warp", "iTerm2", "cmux", "Terminal")
     var terminalApp: String?
+    /// cmux workspace/surface IDs captured by the hook script from its own
+    /// `os.environ` (inherited from claude → cmux shell). The only reliable
+    /// way to read these — `ps -E` on macOS hides env vars of hardened-runtime
+    /// processes, so we can't query them after the fact.
+    var cmuxWorkspaceId: String?
+    var cmuxSurfaceId: String?
     /// Codex rollout transcript path (non-nil for Codex sessions)
     var codexTranscriptPath: String?
 

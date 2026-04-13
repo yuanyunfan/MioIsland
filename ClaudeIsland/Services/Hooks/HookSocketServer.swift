@@ -31,6 +31,11 @@ struct HookEvent: Codable, Sendable {
     let transcriptPath: String?
     /// Env-detected terminal app hint from hook script (fallback when process tree fails)
     let terminalApp: String?
+    /// cmux workspace/surface IDs captured by the hook script from `os.environ`.
+    /// The only reliable way to read these — macOS hides hardened-runtime env
+    /// vars from `ps -E`.
+    let cmuxWorkspaceId: String?
+    let cmuxSurfaceId: String?
 
     enum CodingKeys: String, CodingKey {
         case sessionId = "session_id"
@@ -41,10 +46,12 @@ struct HookEvent: Codable, Sendable {
         case message, source
         case transcriptPath = "transcript_path"
         case terminalApp = "terminal_app"
+        case cmuxWorkspaceId = "cmux_workspace_id"
+        case cmuxSurfaceId = "cmux_surface_id"
     }
 
     /// Create a copy with updated toolUseId
-    init(sessionId: String, cwd: String, event: String, status: String, pid: Int?, tty: String?, tool: String?, toolInput: [String: AnyCodable]?, toolUseId: String?, notificationType: String?, message: String?, source: String? = nil, transcriptPath: String? = nil, terminalApp: String? = nil) {
+    init(sessionId: String, cwd: String, event: String, status: String, pid: Int?, tty: String?, tool: String?, toolInput: [String: AnyCodable]?, toolUseId: String?, notificationType: String?, message: String?, source: String? = nil, transcriptPath: String? = nil, terminalApp: String? = nil, cmuxWorkspaceId: String? = nil, cmuxSurfaceId: String? = nil) {
         self.sessionId = sessionId
         self.cwd = cwd
         self.event = event
@@ -59,6 +66,8 @@ struct HookEvent: Codable, Sendable {
         self.source = source
         self.transcriptPath = transcriptPath
         self.terminalApp = terminalApp
+        self.cmuxWorkspaceId = cmuxWorkspaceId
+        self.cmuxSurfaceId = cmuxSurfaceId
     }
 
     var sessionPhase: SessionPhase {
