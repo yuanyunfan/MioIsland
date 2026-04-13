@@ -25,10 +25,17 @@ echo ">>> Setting version to $CLEAN_VERSION..."
 sed -i '' "s/MARKETING_VERSION = [0-9.]*/MARKETING_VERSION = $CLEAN_VERSION/g" \
   "$PROJECT_DIR/ClaudeIsland.xcodeproj/project.pbxproj"
 
-# 2. Build (unsigned)
-echo ">>> Building Release (unsigned)..."
+# 2. Build (unsigned, universal)
+#
+# ARCHS + ONLY_ACTIVE_ARCH are critical: xcodebuild defaults to building
+# only the current machine's architecture, which would ship an arm64-only
+# binary to Intel Mac users — who then see "Code Island can't be opened"
+# with no recoverable error (xattr won't help, it's a pure architecture
+# mismatch). Force a universal build so the same zip works on both archs.
+echo ">>> Building Release (unsigned, universal arm64+x86_64)..."
 cd "$PROJECT_DIR"
 xcodebuild -scheme ClaudeIsland -configuration Release build \
+  ARCHS="arm64 x86_64" ONLY_ACTIVE_ARCH=NO \
   CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY="" 2>&1 | tail -1
 
 # 3. Bundle built-in plugins into the .app.
