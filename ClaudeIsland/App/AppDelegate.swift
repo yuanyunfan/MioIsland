@@ -74,6 +74,9 @@ import UserNotifications
             self?.handleScreenChange()
         }
 
+        // Initialize Sparkle auto-updater
+        _ = UpdaterManager.shared
+
         // Load native plugins from ~/.config/codeisland/plugins/
         NativePluginManager.shared.loadAll()
 

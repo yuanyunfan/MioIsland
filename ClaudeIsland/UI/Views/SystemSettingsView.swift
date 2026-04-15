@@ -651,6 +651,8 @@ private struct AdvancedTab: View {
 // MARK: - About tab
 
 private struct AboutTab: View {
+    @ObservedObject private var updater = UpdaterManager.shared
+
     private var version: String {
         let v = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
         let b = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
@@ -669,6 +671,27 @@ private struct AboutTab: View {
                         .font(.system(size: 12, design: .monospaced))
                         .foregroundColor(Theme.detailText.opacity(0.6))
                 }
+            }
+
+            SettingsCard {
+                Button {
+                    updater.checkForUpdates()
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                            .font(.system(size: 12))
+                        Text(L10n.checkForUpdates)
+                            .font(.system(size: 12, weight: .semibold))
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 9, weight: .semibold))
+                            .opacity(0.4)
+                    }
+                    .foregroundColor(Theme.detailText.opacity(0.9))
+                }
+                .buttonStyle(.plain)
+                .disabled(!updater.canCheckForUpdates)
+                .opacity(updater.canCheckForUpdates ? 1.0 : 0.5)
             }
 
             SettingsCard {

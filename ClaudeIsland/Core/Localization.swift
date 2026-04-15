@@ -151,6 +151,7 @@ enum L10n {
     static var codexSupport: String { tr("Codex Support", "Codex 支持") }
     static var accessibility: String { tr("Accessibility", "辅助功能") }
     static var version: String { tr("Version", "版本") }
+    static var checkForUpdates: String { tr("Check for Updates", "检查更新") }
     static var quit: String { tr("Quit", "退出") }
     static var on: String { tr("On", "开") }
     static var off: String { tr("Off", "关") }
