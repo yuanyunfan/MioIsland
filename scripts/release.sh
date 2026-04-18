@@ -128,12 +128,6 @@ if [ -n "$SPARKLE_SIGN" ] && [ -f "$KEYS_DIR/eddsa_private_key" ]; then
   echo ">>> Signing DMG with Sparkle EdDSA..."
   SPARKLE_SIG=$("$SPARKLE_SIGN" "$DMG_PATH" --ed-key-file "$KEYS_DIR/eddsa_private_key" 2>&1)
   echo "    Signature: ${SPARKLE_SIG:0:40}..."
-elif [ ! -f "$KEYS_DIR/eddsa_private_key" ]; then
-  echo ">>> SKIP Sparkle signing: no key at $KEYS_DIR/eddsa_private_key"
-  echo "    Run ./scripts/generate-keys.sh to set up Sparkle signing"
-else
-  echo ">>> SKIP Sparkle signing: sign_update tool not found"
-  echo "    Build the project in Xcode first to download Sparkle package"
 fi
 
 # 8. Generate appcast.xml
@@ -146,6 +140,30 @@ DOWNLOAD_URL="https://github.com/MioMioOS/MioIsland/releases/download/${VERSION}
 ED_SIG=$(echo "$SPARKLE_SIG" | grep -oE 'sparkle:edSignature="[^"]*"' | sed 's/sparkle:edSignature="//;s/"//' || true)
 SIG_LENGTH=$(echo "$SPARKLE_SIG" | grep -oE 'length="[^"]*"' | sed 's/length="//;s/"//' || true)
 [ -z "$SIG_LENGTH" ] && SIG_LENGTH="$DMG_SIZE"
+
+# HARD STOP: Sparkle auto-update breaks silently with empty signatures.
+# v2.1.6 shipped a bare appcast (no key on the release machine) and every
+# user saw "此更新未正确签名". We would rather abort now than push that.
+if [ -z "$ED_SIG" ]; then
+  echo ""
+  echo "ERROR: Sparkle EdDSA signing did not produce a signature."
+  echo "Refusing to publish an unsigned appcast — every Sparkle auto-update"
+  echo "would fail with '此更新未正确签名'."
+  echo ""
+  if [ ! -f "$KEYS_DIR/eddsa_private_key" ]; then
+    echo "Cause: .sparkle-keys/eddsa_private_key is missing."
+    echo "Fix:   ask the project admin for the canonical private key."
+    echo "       See docs/RELEASE-GUIDE.md §3 for details."
+  elif [ -z "$SPARKLE_SIGN" ]; then
+    echo "Cause: sign_update tool not found."
+    echo "Fix:   build the project in Xcode once to download the Sparkle"
+    echo "       SPM package, then re-run this script."
+  else
+    echo "Cause: sign_update ran but returned unexpected output:"
+    echo "$SPARKLE_SIG" | sed 's/^/       /'
+  fi
+  exit 1
+fi
 
 echo ">>> Generating appcast.xml..."
 cat > "$APPCAST_PATH" << APPCAST_EOF
