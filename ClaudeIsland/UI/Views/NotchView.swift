@@ -841,6 +841,7 @@ struct CollapsedNotchContent: View {
     @ObservedObject private var buddyReader = BuddyReader.shared
     @AppStorage("usePixelCat") private var usePixelCat: Bool = false
     @ObservedObject private var notchStore: NotchCustomizationStore = .shared
+    private let pulseTimer = Timer.publish(every: 0.6, on: .main, in: .common).autoconnect()
 
     // MARK: - Unattended Task Alert
 
@@ -959,15 +960,15 @@ struct CollapsedNotchContent: View {
             }
             .padding(.trailing, 6)
         }
+        .onReceive(pulseTimer) { _ in
+            pulsePhase.toggle()
+        }
         .onReceive(carouselTimer) { _ in
             withAnimation(.easeInOut(duration: 0.3)) {
                 carouselIndex = (carouselIndex + 1) % carouselSlideCount
             }
         }
         .onAppear {
-            withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
-                pulsePhase = true
-            }
             // Start unattended check timer (every 5 seconds)
             unattendedTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { _ in
                 DispatchQueue.main.async {

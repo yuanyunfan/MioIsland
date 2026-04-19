@@ -3,7 +3,7 @@
 //  ClaudeIsland
 //
 //  Renders any emoji as an animated 16x16 pixel art sprite.
-//  Uses TimelineView(.animation) + Canvas for 60fps programmatic rendering.
+//  Uses a throttled TimelineView + Canvas for lightweight sprite rendering.
 //
 
 import SwiftUI
@@ -40,6 +40,11 @@ struct EmojiPixelView: View {
     let emoji: String
     let style: EmojiAnimStyle
 
+    /// The notch is rendered continuously on the built-in display, so a
+    /// display-linked timeline keeps SwiftUI's layout system hot. Throttling
+    /// redraws preserves the effect while dramatically reducing background CPU.
+    private static let redrawInterval: TimeInterval = 1.0 / 12.0
+
     private static let gridSize = 16
     private static let P: CGFloat = 3
     static let canvasSize: CGFloat = CGFloat(gridSize) * P  // 48
@@ -54,7 +59,7 @@ struct EmojiPixelView: View {
     }
 
     var body: some View {
-        TimelineView(.animation) { timeline in
+        TimelineView(.periodic(from: .now, by: Self.redrawInterval)) { timeline in
             Canvas { context, size in
                 let elapsed = timeline.date.timeIntervalSinceReferenceDate
                 let frame = Int(elapsed * 60)
