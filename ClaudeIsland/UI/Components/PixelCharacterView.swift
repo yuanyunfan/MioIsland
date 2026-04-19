@@ -22,9 +22,16 @@ struct PixelCharacterView: View {
     let state: AnimationState
 
     /// Display-linked animation kept the always-visible notch view hot on the
-    /// main thread. A lower redraw cadence keeps the sprite expressive without
-    /// forcing SwiftUI to relayout at 60fps on the built-in display.
-    private static let redrawInterval: TimeInterval = 1.0 / 12.0
+    /// main thread. We use a lower cadence, and slow non-urgent states down
+    /// further, to keep the notch expressive without continuously repainting.
+    private static func redrawInterval(for state: AnimationState) -> TimeInterval {
+        switch state {
+        case .working, .thinking, .needsYou:
+            return 1.0 / 8.0
+        case .idle, .done, .error:
+            return 1.0 / 4.0
+        }
+    }
 
     /// Canvas size matches the 13x11 grid scaled by P.
     private static let gridW = 13
@@ -34,7 +41,7 @@ struct PixelCharacterView: View {
     static let canvasH: CGFloat = CGFloat(gridH) * P
 
     var body: some View {
-        TimelineView(.periodic(from: .now, by: Self.redrawInterval)) { timeline in
+        TimelineView(.periodic(from: .now, by: Self.redrawInterval(for: state))) { timeline in
             Canvas { context, size in
                 let elapsed = timeline.date.timeIntervalSinceReferenceDate
                 let frame = Int(elapsed * 60)

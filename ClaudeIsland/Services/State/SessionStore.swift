@@ -257,7 +257,6 @@ actor SessionStore {
         }
 
         sessions[sessionId] = session
-        publishState()
 
         // Schedule file sync based on provider type
         switch session.providerType {
@@ -527,7 +526,6 @@ actor SessionStore {
             session.phase = .processing
         }
         sessions[sessionId] = session
-        publishState()
     }
 
     private func processQuestionSkipped(sessionId: String, toolUseId: String) {
@@ -536,7 +534,6 @@ actor SessionStore {
             session.phase = .processing
         }
         sessions[sessionId] = session
-        publishState()
     }
 
     // MARK: - Tool Completion Processing

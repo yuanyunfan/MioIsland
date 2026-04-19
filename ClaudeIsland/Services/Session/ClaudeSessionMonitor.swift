@@ -16,9 +16,11 @@ class ClaudeSessionMonitor: ObservableObject {
     @Published var pendingInstances: [SessionState] = []
 
     private var cancellables = Set<AnyCancellable>()
+    private var conversationInfoParsesInFlight = Set<String>()
 
     init() {
         SessionStore.shared.sessionsPublisher
+            .removeDuplicates()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] sessions in
                 self?.updateFromSessions(sessions)
@@ -145,19 +147,36 @@ class ClaudeSessionMonitor: ObservableObject {
     // MARK: - State Update
 
     private func updateFromSessions(_ sessions: [SessionState]) {
-        instances = sessions
-        pendingInstances = sessions.filter { $0.needsAttention }
+        if instances != sessions {
+            instances = sessions
+        }
+
+        let pending = sessions.filter { $0.needsAttention }
+        if pendingInstances != pending {
+            pendingInstances = pending
+        }
 
         // Eagerly parse conversationInfo for sessions missing it
         for session in sessions where session.conversationInfo.firstUserMessage == nil {
-            Task {
+            guard conversationInfoParsesInFlight.insert(session.sessionId).inserted else {
+                continue
+            }
+
+            let sessionId = session.sessionId
+            let cwd = session.cwd
+            Task { [weak self] in
                 let info = await ConversationParser.shared.parse(
-                    sessionId: session.sessionId,
-                    cwd: session.cwd
+                    sessionId: sessionId,
+                    cwd: cwd
                 )
+
+                await MainActor.run {
+                    self?.conversationInfoParsesInFlight.remove(sessionId)
+                }
+
                 if info.firstUserMessage != nil {
                     await SessionStore.shared.updateConversationInfo(
-                        sessionId: session.sessionId,
+                        sessionId: sessionId,
                         info: info
                     )
                 }

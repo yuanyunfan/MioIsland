@@ -43,7 +43,14 @@ struct EmojiPixelView: View {
     /// The notch is rendered continuously on the built-in display, so a
     /// display-linked timeline keeps SwiftUI's layout system hot. Throttling
     /// redraws preserves the effect while dramatically reducing background CPU.
-    private static let redrawInterval: TimeInterval = 1.0 / 12.0
+    private static func redrawInterval(for style: EmojiAnimStyle) -> TimeInterval {
+        switch style {
+        case .wave:
+            return 1.0 / 8.0
+        case .rock:
+            return 1.0 / 4.0
+        }
+    }
 
     private static let gridSize = 16
     private static let P: CGFloat = 3
@@ -59,7 +66,7 @@ struct EmojiPixelView: View {
     }
 
     var body: some View {
-        TimelineView(.periodic(from: .now, by: Self.redrawInterval)) { timeline in
+        TimelineView(.periodic(from: .now, by: Self.redrawInterval(for: style))) { timeline in
             Canvas { context, size in
                 let elapsed = timeline.date.timeIntervalSinceReferenceDate
                 let frame = Int(elapsed * 60)

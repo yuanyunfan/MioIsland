@@ -18,6 +18,7 @@ class ChatHistoryManager: ObservableObject {
 
     private init() {
         SessionStore.shared.sessionsPublisher
+            .removeDuplicates()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] sessions in
                 self?.updateFromSessions(sessions)
@@ -76,14 +77,21 @@ class ChatHistoryManager: ObservableObject {
     private func updateFromSessions(_ sessions: [SessionState]) {
         var newHistories: [String: [ChatHistoryItem]] = [:]
         var newAgentDescriptions: [String: [String: String]] = [:]
+
         for session in sessions {
             let filteredItems = filterOutSubagentTools(session.chatItems)
             newHistories[session.sessionId] = filteredItems
             newAgentDescriptions[session.sessionId] = session.subagentState.agentDescriptions
             loadedSessions.insert(session.sessionId)
         }
-        histories = newHistories
-        agentDescriptions = newAgentDescriptions
+
+        if histories != newHistories {
+            histories = newHistories
+        }
+
+        if agentDescriptions != newAgentDescriptions {
+            agentDescriptions = newAgentDescriptions
+        }
     }
 
     private func filterOutSubagentTools(_ items: [ChatHistoryItem]) -> [ChatHistoryItem] {
