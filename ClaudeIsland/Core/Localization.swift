@@ -40,6 +40,90 @@ enum L10n {
     // Settings
     static var language: String { tr("Language", "语言") }
 
+    // MARK: - Rate limit notification (RateLimitMonitor)
+
+    static var rateLimitNotificationTitle: String {
+        tr("Claude Code Usage Warning", "Claude Code 用量警告")
+    }
+    static func rateLimitNotificationBody(window: String, percent: Int) -> String {
+        tr(
+            "\(window) window usage has reached \(percent)%.",
+            "\(window) 窗口用量已达 \(percent)%。"
+        )
+    }
+    static func rateLimitNotificationBodyWithReset(window: String, percent: Int, resetHint: String) -> String {
+        tr(
+            "\(window) window usage has reached \(percent)%. Resets in \(resetHint).",
+            "\(window) 窗口用量已达 \(percent)%，\(resetHint)后重置。"
+        )
+    }
+
+    // MARK: - Short duration formatting (<1min / 5min / 1h23m / 3d)
+    // Used by RateLimitMonitor to render "resets in X" hints.
+
+    static var durationLessThanOneMinute: String {
+        tr("<1min", "<1分钟")
+    }
+    static func durationMinutes(_ m: Int) -> String {
+        tr("\(m)min", "\(m)分钟")
+    }
+    static func durationHoursMinutes(_ h: Int, _ m: Int) -> String {
+        tr("\(h)h\(m)m", "\(h)小时\(m)分钟")
+    }
+    static func durationHours(_ h: Int) -> String {
+        tr("\(h)h", "\(h)小时")
+    }
+    static func durationDays(_ d: Int) -> String {
+        tr("\(d)d", "\(d)天")
+    }
+
+    // MARK: - Notch menu
+
+    static var alertThreshold: String {
+        tr("Alert", "警告阈值")
+    }
+
+    // MARK: - Chat processing indicator
+    //
+    // Note: the existing `working` entry below is "Working..." with a
+    // trailing ellipsis (used in static labels). This new entry is bare
+    // "Working" because ProcessingIndicatorView animates dots separately
+    // on top of the base text.
+    static var workingBaseLabel: String {
+        tr("Working", "工作中")
+    }
+
+    // MARK: - Anthropic API Proxy (Settings → General)
+
+    static var anthropicApiProxy: String {
+        tr("Anthropic API Proxy", "Anthropic API 代理")
+    }
+
+    static var anthropicApiProxyPlaceholder: String {
+        "http://127.0.0.1:7890"  // URL — no translation
+    }
+
+    /// Multi-paragraph help text under the Anthropic API Proxy field.
+    /// Documents scope (what it covers) and non-coverage (what it doesn't).
+    static var anthropicApiProxyDescription: String {
+        tr(
+            """
+            Applies to: the rate-limit bar (api.anthropic.com) and every subprocess MioIsland spawns — including the Stats plugin's claude CLI and any future plugin's shell-outs. HTTPS_PROXY / HTTP_PROXY / ALL_PROXY are set once at startup, all children inherit automatically.
+
+            Does NOT apply to: CodeLight sync (always direct) or third-party plugin URLSession calls (those use system proxy).
+
+            Leave empty for direct connection.
+            """,
+            """
+            作用于：刘海额度条 (api.anthropic.com) 和 MioIsland 启动的所有子进程，包括 Stats 插件的 claude CLI。启动时设置一次 HTTPS_PROXY / HTTP_PROXY / ALL_PROXY，子进程自动继承。
+
+            不作用于：CodeLight 同步（始终直连）、第三方插件的 URLSession 调用（走系统代理）。
+
+            留空即直连。
+            """
+        )
+    }
+
     // MARK: - Session list
 
     static var sessions: String { tr("sessions", "个会话") }
@@ -67,6 +151,8 @@ enum L10n {
     static var codexSupport: String { tr("Codex Support", "Codex 支持") }
     static var accessibility: String { tr("Accessibility", "辅助功能") }
     static var version: String { tr("Version", "版本") }
+    static var checkForUpdates: String { tr("Check for Updates", "检查更新") }
+    static var standby: String { tr("Standby", "待机中") }
     static var quit: String { tr("Quit", "退出") }
     static var on: String { tr("On", "开") }
     static var off: String { tr("Off", "关") }
@@ -84,8 +170,65 @@ enum L10n {
     static var tabAbout: String { tr("About", "关于") }
     static var tabPresets: String { tr("Launch Presets", "启动预设") }
     static var tabCodeLight: String { tr("CodeLight", "CodeLight") }
+    static var tabCmuxConnection: String { tr("cmux Connection", "cmux 连接") }
+    static var tabLogs: String { tr("Logs", "日志") }
+
+    // cmux connection tab
+    static var cmuxTabHeader: String { tr("Diagnose the relay between your iPhone and the terminal.", "诊断手机和终端之间的消息转发链路。") }
+    static var cmuxBinaryRow: String { tr("cmux CLI", "cmux 命令行") }
+    static var cmuxBinaryFound: String { tr("Found", "已找到") }
+    static var cmuxBinaryMissing: String { tr("Not installed at /Applications/cmux.app", "未安装在 /Applications/cmux.app") }
+    static var accessibilityRowTitle: String { tr("Accessibility permission", "辅助功能权限") }
+    static var accessibilityGranted: String { tr("Granted", "已授权") }
+    static var accessibilityDenied: String { tr("Not granted — AppleScript relays will silently fail", "未授权 — AppleScript 转发会静默失败") }
+    static var automationRowTitle: String { tr("Automation permission", "自动化权限") }
+    static var automationUnknown: String { tr("Will be requested on next send", "下次发送时会请求") }
+    static var runningClaudeCount: String { tr("Detected Claude sessions", "检测到的 Claude 会话数") }
+    static var testSendButton: String { tr("Test send", "测试发送") }
+    static var testSending: String { tr("Sending…", "发送中…") }
+    static var testSendSuccess: String { tr("✓ Delivered", "✓ 已送达") }
+    static var testSendNoTarget: String { tr("No cmux-hosted Claude session detected", "没有检测到 cmux 里的 Claude 会话") }
+    static var testSendFailed: String { tr("Failed — check logs tab", "失败 — 请查看日志 tab") }
+    static var openAccessibilitySettings: String { tr("Open Accessibility settings", "打开辅助功能设置") }
+    static var openAutomationSettings: String { tr("Open Automation settings", "打开自动化设置") }
+    static var refreshStatus: String { tr("Refresh", "刷新") }
+    static var requestAutomationButton: String { tr("Request Automation permission", "请求自动化权限") }
+    static var requestAutomationNoTerminal: String { tr("No supported terminal is running — start cmux/iTerm/Terminal first", "没有受支持的终端在运行 — 请先启动 cmux/iTerm/Terminal") }
+    static var requestAutomationPrompted: String { tr("Dialog shown — approve it, then tap Refresh", "已触发弹窗 — 请同意后点刷新") }
+    static var requestAutomationDenied: String { tr("Dialog denied or still missing permission", "弹窗被拒或权限仍缺失") }
+
+    // logs tab
+    static var logsHeader: String { tr("Real-time log output. Use this when submitting issues.", "实时日志输出。提交 issue 时请附上。") }
+    static var logsCopyAll: String { tr("Copy all", "复制全部") }
+    static var logsOpenFile: String { tr("Reveal file", "打开文件夹") }
+    static var logsSubmitIssue: String { tr("Submit GitHub issue", "提交 GitHub issue") }
+    static var logsCopied: String { tr("Copied", "已复制") }
+    static var logsIssueClipboardNotice: String { tr("Full log copied to clipboard — paste below", "完整日志已复制到剪贴板 — 请粘贴到下方") }
+    static var logsEmpty: String { tr("Log is empty. Interact with CodeIsland to generate entries.", "日志为空。操作 CodeIsland 会产生日志。") }
     static var pairedIPhones: String { tr("Paired iPhones", "已配对 iPhone") }
     static var pairNewPhone: String { tr("Pair New iPhone", "配对新 iPhone") }
+    // Pair iPhone inline panel
+    static var pairPanelOnline: String { tr("Online", "在线") }
+    static var pairPanelNotConnected: String { tr("Not connected", "未连接") }
+    static var pairPanelConnecting: String { tr("Connecting…", "连接中…") }
+    static var pairPanelStepServerTitle: String { tr("Step 1 · Configure Server", "第 1 步 · 配置服务器") }
+    static var pairPanelStepServerBody: String { tr("Set your CodeLight relay server. Your messages sync through it end-to-end encrypted — the server never sees plaintext. Without this step, the QR code cannot be generated.", "先设置一个 CodeLight 中继服务器。你的消息会通过它端到端加密同步 —— 服务端看不到明文。没配好这一步，下面的二维码不会生成。") }
+    static var pairPanelStepServerHint: String { tr("Use your self-hosted server, or the official free server island.wdao.chat", "可以填你自建的服务器，或用官方免费服务器 island.wdao.chat") }
+    static var pairPanelServerPlaceholder: String { tr("https://your-server.example", "https://你的服务器.example") }
+    static var pairPanelSaveAndConnect: String { tr("Save and Connect", "保存并连接") }
+    static var pairPanelChangeServer: String { tr("Change Server", "更换服务器") }
+    static var pairPanelCancel: String { tr("Cancel", "取消") }
+    static var pairPanelSave: String { tr("Save", "保存") }
+    static var pairPanelStoredLocally: String { tr("The server URL is stored locally and never leaves your Mac.", "服务器地址仅保存在本机，不会外发。") }
+    static var pairPanelStepScanTitle: String { tr("Step 2 · Scan with Code Light", "第 2 步 · 用 Code Light 扫码") }
+    static var pairPanelStepScanBody: String { tr("Open Code Light on iPhone and scan this QR, or enter the short code manually.", "在 iPhone 打开 Code Light，扫描下方二维码，或手动输入配对码。") }
+    static var pairPanelShortCodeLabel: String { tr("Pairing Code", "配对码") }
+    static var pairPanelGeneratingCode: String { tr("Generating pairing code…", "生成配对码中…") }
+    static var pairPanelLinkedDevices: String { tr("Linked Devices", "已连接设备") }
+    static var pairPanelChangeServerTooltip: String { tr("Change server URL", "更换服务器地址") }
+    static var pairPanelServerLabel: String { tr("Server", "服务器") }
+    static var pairPanelDeviceLabel: String { tr("This Mac", "本机") }
+    static var pairPanelServerErrorPrefix: String { tr("Connection error:", "连接错误：") }
     static var launchPresetsSection: String { tr("Launch Presets", "启动预设") }
     static var addPreset: String { tr("New Preset", "新建预设") }
     static var noPresets: String { tr("No presets yet — tap + to add one", "还没有预设，点击 + 添加") }
@@ -99,6 +242,7 @@ enum L10n {
     static var starOnGitHub: String { tr("Star on GitHub", "GitHub 点星") }
     static var wechatLabel: String { tr("WeChat", "微信") }
     static var maintainedTagline: String { tr("Actively maintained · Your star keeps us going!", "持续更新中 · Star 是我们最大的动力！") }
+    static var quitApp: String { tr("Quit Mio Island", "退出 Mio Island") }
 
     // MARK: - Plugin marketplace
     static var pluginMarketplaceTitle: String { tr("Plugin Marketplace", "插件市场") }
@@ -287,6 +431,7 @@ enum L10n {
     static var smartSuppression: String { tr("Smart Suppression", "智能抑制") }
     static var autoCollapseOnMouseLeave: String { tr("Auto-Collapse on Leave", "离开时自动收起") }
     static var compactCollapsed: String { tr("Compact Notch", "紧凑刘海") }
+    static var autoExpandOnComplete: String { tr("Auto-Expand on Complete", "完成时自动展开") }
 
     // MARK: - Notch customization
     //

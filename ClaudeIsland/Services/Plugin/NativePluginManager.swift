@@ -112,33 +112,61 @@ final class NativePluginManager: ObservableObject {
         }
 
         let fm = FileManager.default
-        let dir = pluginsDir
 
-        // Create plugins dir if needed
-        if !fm.fileExists(atPath: dir.path) {
-            try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        // Ensure the user plugins dir exists.
+        if !fm.fileExists(atPath: pluginsDir.path) {
+            try? fm.createDirectory(at: pluginsDir, withIntermediateDirectories: true)
         }
 
-        // Scan for .bundle files
-        guard let contents = try? fm.contentsOfDirectory(
-            at: dir,
-            includingPropertiesForKeys: nil
-        ) else {
-            Self.log.info("No plugins directory or empty")
-            return
+        // Scan two locations, in this order:
+        //   1) user plugins dir  (~/.config/codeisland/plugins/)
+        //   2) bundled plugins   (Code Island.app/Contents/Resources/Plugins/)
+        //
+        // User-installed plugins take precedence — duplicate IDs from the
+        // bundled directory are skipped by loadPlugin(). This means users can
+        // upgrade a built-in plugin via the marketplace without losing the
+        // fallback when they delete the upgraded copy.
+        var scanDirs: [URL] = [pluginsDir]
+        if let bundled = Bundle.main.resourceURL?.appendingPathComponent("Plugins"),
+           fm.fileExists(atPath: bundled.path) {
+            scanDirs.append(bundled)
         }
 
-        for url in contents where url.pathExtension == "bundle" {
-            loadPlugin(at: url)
+        for dir in scanDirs {
+            guard let contents = try? fm.contentsOfDirectory(
+                at: dir,
+                includingPropertiesForKeys: nil
+            ) else { continue }
+            for url in contents where url.pathExtension == "bundle" {
+                loadPlugin(at: url)
+            }
         }
 
         Self.log.info("Loaded \(self.loadedPlugins.count) native plugin(s)")
     }
 
+    /// Tracks CFBundleIdentifier values whose code has already been loaded
+    /// into this process. Loading the same Swift module twice from different
+    /// paths triggers objc duplicate-class warnings ("_TtC... is implemented
+    /// in both ...") and can cause spurious casting failures, so we dedupe
+    /// *before* calling `loadAndReturnError()`.
+    private var loadedBundleIdentifiers: Set<String> = []
+
     private func loadPlugin(at url: URL) {
         guard let bundle = Bundle(url: url) else {
             Self.log.warning("Failed to create bundle from \(url.lastPathComponent)")
             return
+        }
+
+        // Dedupe by CFBundleIdentifier before touching the dylib. This is
+        // what keeps the built-in copy at /Applications/.../Resources/Plugins/
+        // from clashing with a newer user-installed copy in ~/.config/.
+        if let bundleId = bundle.bundleIdentifier {
+            if loadedBundleIdentifiers.contains(bundleId) {
+                Self.log.info("Skipping duplicate bundle \(url.lastPathComponent) — \(bundleId) already loaded")
+                return
+            }
+            loadedBundleIdentifiers.insert(bundleId)
         }
 
         do {

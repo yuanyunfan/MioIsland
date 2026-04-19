@@ -151,6 +151,12 @@ actor SessionStore {
         var session = sessions[sessionId] ?? createSession(from: event)
 
         session.pid = event.pid
+        if let wsId = event.cmuxWorkspaceId, !wsId.isEmpty {
+            session.cmuxWorkspaceId = wsId
+        }
+        if let surfId = event.cmuxSurfaceId, !surfId.isEmpty {
+            session.cmuxSurfaceId = surfId
+        }
 
         // Provider-specific metadata and terminal app detection
         if session.providerType.supportsProcessTree {

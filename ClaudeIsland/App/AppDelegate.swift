@@ -16,6 +16,25 @@ import UserNotifications
         super.init()
         AppDelegate.shared = self
         UserDefaults.standard.register(defaults: ["usageWarningThreshold": 90])
+
+        // Apply the user's Anthropic API Proxy setting to the process
+        // environment as early as possible, BEFORE any plugin is loaded
+        // or any subprocess is spawned. All Foundation.Process children
+        // (stats' claude CLI, future plugins' shell-outs) will inherit
+        // HTTPS_PROXY / HTTP_PROXY / ALL_PROXY without per-plugin opt-in.
+        AppSettings.applyProxyToProcessEnvironment()
+
+        // Re-apply whenever any UserDefaults value changes — cheap, idempotent.
+        // The notification fires on every defaults write (including unrelated
+        // keys), but applyProxyToProcessEnvironment() is a small setenv loop
+        // so the redundant calls are harmless.
+        NotificationCenter.default.addObserver(
+            forName: UserDefaults.didChangeNotification,
+            object: nil,
+            queue: .main
+        ) { _ in
+            AppSettings.applyProxyToProcessEnvironment()
+        }
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -61,6 +80,9 @@ import UserNotifications
         screenObserver = ScreenObserver { [weak self] in
             self?.handleScreenChange()
         }
+
+        // Initialize Sparkle auto-updater
+        _ = UpdaterManager.shared
 
         // Load native plugins from ~/.config/codeisland/plugins/
         NativePluginManager.shared.loadAll()

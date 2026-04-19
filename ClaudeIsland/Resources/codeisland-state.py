@@ -145,6 +145,18 @@ def main():
         "tty": tty,
     }
 
+    # Capture cmux identity from our own environment.
+    # The hook script is a direct child of claude, which inherited these env
+    # vars from the cmux shell. We're the only reliable way to read them —
+    # `ps -E` on macOS hides env vars of hardened-runtime processes even to the
+    # same user, so CodeIsland can't fetch them after the fact.
+    cmux_workspace_id = os.environ.get("CMUX_WORKSPACE_ID")
+    cmux_surface_id = os.environ.get("CMUX_SURFACE_ID")
+    if cmux_workspace_id:
+        state["cmux_workspace_id"] = cmux_workspace_id
+    if cmux_surface_id:
+        state["cmux_surface_id"] = cmux_surface_id
+
     # For non-Codex sessions, send env-detected terminal as a hint for Swift fallback
     if not is_codex:
         terminal_hint = detect_terminal_app()

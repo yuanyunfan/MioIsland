@@ -33,6 +33,13 @@ struct SessionState: Equatable, Identifiable, Sendable {
     /// Detected terminal app name (e.g., "Ghostty", "Warp", "iTerm2", "cmux", "Terminal")
     var terminalApp: String?
 
+    /// cmux workspace/surface IDs captured by the hook script from its own
+    /// `os.environ` (inherited from claude → cmux shell). The only reliable
+    /// way to read these — `ps -E` on macOS hides env vars of hardened-runtime
+    /// processes, so we can't query them after the fact.
+    var cmuxWorkspaceId: String?
+    var cmuxSurfaceId: String?
+
     /// Codex rollout transcript path — convenience accessor for providerMetadata["transcriptPath"]
     var codexTranscriptPath: String? {
         get { providerMetadata["transcriptPath"] }
@@ -92,6 +99,8 @@ struct SessionState: Equatable, Identifiable, Sendable {
         tty: String? = nil,
         isInTmux: Bool = false,
         terminalApp: String? = nil,
+        cmuxWorkspaceId: String? = nil,
+        cmuxSurfaceId: String? = nil,
         phase: SessionPhase = .idle,
         chatItems: [ChatHistoryItem] = [],
         toolTracker: ToolTracker = ToolTracker(),
@@ -113,6 +122,8 @@ struct SessionState: Equatable, Identifiable, Sendable {
         self.tty = tty
         self.isInTmux = isInTmux
         self.terminalApp = terminalApp
+        self.cmuxWorkspaceId = cmuxWorkspaceId
+        self.cmuxSurfaceId = cmuxSurfaceId
         self.phase = phase
         self.chatItems = chatItems
         self.toolTracker = toolTracker

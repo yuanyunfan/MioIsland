@@ -24,7 +24,7 @@ struct NotchView: View {
     @State private var previousWaitingForInputIds: Set<String> = []
     @State private var previousWaitingForQuestionIds: Set<String> = []
     @State private var waitingForInputTimestamps: [String: Date] = [:]  // sessionId -> when it entered waitingForInput
-    @State private var isVisible: Bool = false
+    @State private var isVisible: Bool = true
     @State private var isHovering: Bool = false
     @State private var isBouncing: Bool = false
     @State private var autoCollapseTimer: DispatchWorkItem? = nil
@@ -167,7 +167,6 @@ struct NotchView: View {
     /// active sessions) is always 0 — the notch shrinks tight around
     /// the hardware shape.
     private var expansionWidth: CGFloat {
-        guard hasActiveSessions else { return 0 }
         let geo = notchStore.customization.geometry(for: viewModel.screenID)
         let userMax = geo.maxWidth
         let userExpansion = max(0, userMax - closedNotchSize.width)
@@ -216,6 +215,15 @@ struct NotchView: View {
     private let openAnimation = Animation.spring(response: 0.42, dampingFraction: 0.8, blendDuration: 0)
     private let closeAnimation = Animation.spring(response: 0.45, dampingFraction: 1.0, blendDuration: 0)
 
+    /// While in Live Edit, the closed notch is pinned to the exact
+    /// configured width/height so the ◀▶/▲▼ arrows produce visible,
+    /// WYSIWYG feedback even when there is no active session content
+    /// to fill the expansion wings. Outside edit mode, the notch keeps
+    /// its content-hugging behavior — no always-on black bar. (Issue #30)
+    private var forceClosedPreviewSize: Bool {
+        notchStore.isEditing && viewModel.status != .opened
+    }
+
     /// User-customized horizontal offset of the notch, clamped at
     /// render time so an off-screen stored value on a smaller
     /// secondary display never bleeds past the edge. Spec 5.5.
@@ -237,7 +245,9 @@ struct NotchView: View {
                 notchLayout
                     .notchPalette()
                     .frame(
+                        minWidth: forceClosedPreviewSize ? closedContentWidth : nil,
                         maxWidth: viewModel.status == .opened ? notchSize.width : closedContentWidth,
+                        minHeight: forceClosedPreviewSize ? closedNotchSize.height : nil,
                         alignment: .top
                     )
                     .padding(
@@ -257,13 +267,14 @@ struct NotchView: View {
                             .padding(.horizontal, topCornerRadius)
                             .animation(.easeInOut(duration: 0.3), value: notchStore.customization.theme)
                     }
-                    .shadow(
-                        color: (viewModel.status == .opened || isHovering) ? .black.opacity(0.7) : .clear,
-                        radius: 6
-                    )
+                    .shadow(color: notchShadowColor, radius: notchShadowRadius)
                     .frame(
+                        minWidth: forceClosedPreviewSize ? closedContentWidth : nil,
                         maxWidth: viewModel.status == .opened ? notchSize.width : closedContentWidth,
-                        maxHeight: viewModel.status == .opened ? notchSize.height : nil,
+                        minHeight: forceClosedPreviewSize ? closedNotchSize.height : nil,
+                        maxHeight: viewModel.status == .opened
+                            ? notchSize.height
+                            : (forceClosedPreviewSize ? closedNotchSize.height : nil),
                         alignment: .top
                     )
                     .animation(viewModel.status == .opened ? openAnimation : closeAnimation, value: viewModel.status)
@@ -312,10 +323,8 @@ struct NotchView: View {
         .preferredColorScheme(.dark)
         .onAppear {
             sessionMonitor.startMonitoring()
-            // Non-notched devices need a visible target since there's no physical notch to hover over
-            if !viewModel.hasPhysicalNotch {
-                isVisible = true
-            }
+            // Always show notch (standby state shows even with no sessions)
+            isVisible = true
         }
         .onChange(of: viewModel.status) { oldStatus, newStatus in
             handleStatusChange(from: oldStatus, to: newStatus)
@@ -399,14 +408,40 @@ struct NotchView: View {
                 )
                 .clipped()
             } else {
-                // Closed without sessions: empty space
-                Rectangle()
-                    .fill(.clear)
-                    .frame(width: closedNotchSize.width - 20)
+                standbyContent
             }
         }
         .frame(height: closedNotchSize.height)
         .clipped()
+    }
+
+    // MARK: - Shadow helpers
+
+    private var notchShadowColor: Color {
+        (viewModel.status == .opened || isHovering) ? .black.opacity(0.7) : .clear
+    }
+
+    private var notchShadowRadius: CGFloat { 6 }
+
+    // MARK: - Standby Content
+
+    /// Mirrors the left wing of CollapsedNotchContent (compact style):
+    /// idle dot + buddy icon, left-aligned, full active-state width.
+    private var standbyContent: some View {
+        HStack(spacing: 0) {
+            HStack(spacing: 4) {
+                Circle()
+                    .fill(Color.white.opacity(0.3))
+                    .frame(width: 6, height: 6)
+                if notchStore.customization.showBuddy {
+                    PixelCharacterView(state: .idle)
+                        .scaleEffect(0.28)
+                        .frame(width: 16, height: 16)
+                }
+            }
+            .padding(.leading, 6)
+            Spacer()
+        }
     }
 
     // MARK: - Opened Header Content
@@ -483,18 +518,9 @@ struct NotchView: View {
             }
             isVisible = true
         } else {
-            // Hide activity when no sessions
+            // No sessions: hide activity but keep notch visible in standby
             activityCoordinator.hideActivity()
-
-            // Delay hiding the notch until animation completes
-            // Non-notched devices stay visible (no physical anchor to hover back)
-            if viewModel.status == .closed && viewModel.hasPhysicalNotch {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    if !hasActiveSessions && viewModel.status == .closed {
-                        isVisible = false
-                    }
-                }
-            }
+            isVisible = true
         }
     }
 
@@ -513,13 +539,8 @@ struct NotchView: View {
                 viewModel.showQuestion(for: questionSession)
             }
         case .closed:
-            // Non-notched devices stay visible (no physical anchor to hover back)
-            guard viewModel.hasPhysicalNotch else { return }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                if viewModel.status == .closed && !hasActiveSessions && !activityCoordinator.expandingActivity.show {
-                    isVisible = false
-                }
-            }
+            // Always remain visible — standby content shows even with no sessions
+            break
         }
     }
 
@@ -601,7 +622,8 @@ struct NotchView: View {
                 return prevPhase == .processing || prevPhase == .compacting
             }
 
-            if !sessionsFromWorkingState.isEmpty && viewModel.status == .closed {
+            let autoExpandOnComplete = UserDefaults.standard.object(forKey: "autoExpandOnComplete") as? Bool ?? true
+            if autoExpandOnComplete && !sessionsFromWorkingState.isEmpty && viewModel.status == .closed {
                 let completedSession = sessionsFromWorkingState[0]
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [self] in
                     guard viewModel.status == .closed else { return }

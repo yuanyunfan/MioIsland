@@ -109,13 +109,40 @@ class RateLimitMonitor: ObservableObject {
 
     private var refreshTimer: Timer?
 
-    private init() {
+    /// Whether the poll loop is currently running. Used to make start()
+    /// idempotent so the timer doesn't get recreated on every toggle.
+    private(set) var isRunning = false
+
+    /// Private init — does NOT start polling. Call `start()` explicitly
+    /// when the Usage Bar is enabled. Previously init would unconditionally
+    /// fire a request and kick off a 300s timer, which meant users who
+    /// disabled the Usage Bar in settings were still silently hitting
+    /// api.anthropic.com every 5 minutes (see issue #50).
+    private init() {}
+
+    /// Begin polling the Anthropic usage API on a 5-minute interval and
+    /// fire an immediate refresh. Idempotent — repeated calls are no-ops.
+    func start() {
+        guard !isRunning else { return }
+        isRunning = true
         refreshTimer = Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 await self?.refresh()
             }
         }
         Task { await refresh() }
+    }
+
+    /// Stop polling and clear cached state. Called when the user toggles
+    /// the Usage Bar off. Clearing `rateLimitInfo` ensures stale data
+    /// doesn't flash back if the bar is re-enabled before the next poll.
+    func stop() {
+        guard isRunning else { return }
+        isRunning = false
+        refreshTimer?.invalidate()
+        refreshTimer = nil
+        hasNotifiedFiveHour = false
+        hasNotifiedSevenDay = false
     }
 
     func refresh() async {
@@ -172,20 +199,13 @@ class RateLimitMonitor: ObservableObject {
 
         // Send macOS notification (no system sound — SoundManager handles audio)
         let content = UNMutableNotificationContent()
-        content.title = L10n.tr(
-            "Claude Code Usage Warning",
-            "Claude Code 用量警告"
-        )
+        content.title = L10n.rateLimitNotificationTitle
         let body: String
         if resetHint.isEmpty {
-            body = L10n.tr(
-                "\(window) window usage has reached \(percent)%.",
-                "\(window) 窗口用量已达 \(percent)%。"
-            )
+            body = L10n.rateLimitNotificationBody(window: window, percent: percent)
         } else {
-            body = L10n.tr(
-                "\(window) window usage has reached \(percent)%. Resets in \(resetHint).",
-                "\(window) 窗口用量已达 \(percent)%，\(resetHint)后重置。"
+            body = L10n.rateLimitNotificationBodyWithReset(
+                window: window, percent: percent, resetHint: resetHint
             )
         }
         content.body = body
@@ -209,19 +229,19 @@ class RateLimitMonitor: ObservableObject {
         let remaining = date.timeIntervalSinceNow
         guard remaining > 0 else { return "" }
         if remaining < 60 {
-            return L10n.tr("<1min", "<1分钟")
+            return L10n.durationLessThanOneMinute
         }
         if remaining < 3600 {
             let m = Int(ceil(remaining / 60))
-            return L10n.tr("\(m)min", "\(m)分钟")
+            return L10n.durationMinutes(m)
         } else if remaining < 86400 {
             let h = Int(remaining / 3600)
             let m = Int(ceil(remaining.truncatingRemainder(dividingBy: 3600) / 60))
             return m > 0
-                ? L10n.tr("\(h)h\(m)m", "\(h)小时\(m)分钟")
-                : L10n.tr("\(h)h", "\(h)小时")
+                ? L10n.durationHoursMinutes(h, m)
+                : L10n.durationHours(h)
         }
-        return L10n.tr("\(Int(remaining / 86400))d", "\(Int(remaining / 86400))天")
+        return L10n.durationDays(Int(remaining / 86400))
     }
 
     /// Read OAuth token from macOS Keychain and call Anthropic usage API
@@ -240,7 +260,8 @@ class RateLimitMonitor: ObservableObject {
         request.timeoutInterval = 10
 
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let session = AppSettings.makeAnthropicSession()
+            let (data, response) = try await session.data(for: request)
             guard let httpResponse = response as? HTTPURLResponse,
                   httpResponse.statusCode == 200 else {
                 DebugLogger.log("RateLimit", "API error: \((response as? HTTPURLResponse)?.statusCode ?? 0)")
