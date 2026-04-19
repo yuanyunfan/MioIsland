@@ -3,7 +3,7 @@
 //  ClaudeIsland
 //
 //  Pixel cat face animation engine.
-//  Uses TimelineView(.animation) + Canvas for 60fps programmatic sprite rendering.
+//  Uses a throttled TimelineView + Canvas for lightweight sprite rendering.
 //  Cat design by user — 13x11 pixel grid.
 //
 
@@ -21,6 +21,11 @@ enum AnimationState: Sendable {
 struct PixelCharacterView: View {
     let state: AnimationState
 
+    /// Display-linked animation kept the always-visible notch view hot on the
+    /// main thread. A lower redraw cadence keeps the sprite expressive without
+    /// forcing SwiftUI to relayout at 60fps on the built-in display.
+    private static let redrawInterval: TimeInterval = 1.0 / 12.0
+
     /// Canvas size matches the 13x11 grid scaled by P.
     private static let gridW = 13
     private static let gridH = 11
@@ -29,7 +34,7 @@ struct PixelCharacterView: View {
     static let canvasH: CGFloat = CGFloat(gridH) * P
 
     var body: some View {
-        TimelineView(.animation) { timeline in
+        TimelineView(.periodic(from: .now, by: Self.redrawInterval)) { timeline in
             Canvas { context, size in
                 let elapsed = timeline.date.timeIntervalSinceReferenceDate
                 let frame = Int(elapsed * 60)
