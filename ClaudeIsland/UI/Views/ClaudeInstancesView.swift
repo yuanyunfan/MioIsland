@@ -560,9 +560,16 @@ struct InstanceRow: View {
         return "\(hours)h"
     }
 
+    /// Agent tag color based on session source
+    private var agentTagColor: Color {
+        let tag = session.agentTag.lowercased()
+        if tag.contains("codex") { return Color(red: 1.0, green: 0.55, blue: 0.0) }
+        return Self.claudeTagFg
+    }
+
     /// Terminal tag color based on app type
     private var terminalTagColor: Color {
-        let tag = terminalTag.lowercased()
+        let tag = session.terminalTag.lowercased()
         if tag.contains("cmux") { return Color(red: 0.56, green: 0.79, blue: 0.98) }      // blue
         if tag.contains("ghostty") { return Color(red: 0.7, green: 0.6, blue: 1.0) }       // purple
         if tag.contains("zellij") { return Color(red: 0.3, green: 0.85, blue: 0.75) }     // teal
@@ -574,11 +581,6 @@ struct InstanceRow: View {
         if tag.contains("kitty") { return Color(red: 0.94, green: 0.5, blue: 0.5) }        // salmon
         if tag.contains("claude") { return Self.claudeTagFg }                               // claude blue
         return Color.white.opacity(0.4)
-    }
-
-    /// Terminal app name — auto-detected from process tree; falls back to "claude" for plain CLI sessions
-    private var terminalTag: String {
-        session.terminalApp ?? (session.isInTmux ? "tmux" : "claude")
     }
 
     /// Accent color based on phase (used for status dot)
@@ -699,16 +701,6 @@ struct InstanceRow: View {
                                 )
                         }
 
-                        // Terminal tag — colored by terminal type
-                        Text(terminalTag)
-                            .notchFont(8, weight: .semibold)
-                            .foregroundColor(terminalTagColor)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 2)
-                            .background(
-                                Capsule().fill(terminalTagColor.opacity(0.12))
-                            )
-
                         // Ended tag
                         if isEnded {
                             Text(L10n.ended)
@@ -746,6 +738,30 @@ struct InstanceRow: View {
                             .frame(width: 16, height: 16)
                             .contentShape(Rectangle())
                             .onTapGesture { onArchive() }
+                    }
+
+                    // Session identity tags live on their own line so both stay
+                    // visible even when the title is long.
+                    HStack(spacing: 6) {
+                        Text(session.agentTag)
+                            .notchFont(8, weight: .semibold)
+                            .foregroundColor(agentTagColor)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(
+                                Capsule().fill(agentTagColor.opacity(0.12))
+                            )
+
+                        Text(session.terminalTag)
+                            .notchFont(8, weight: .semibold)
+                            .foregroundColor(terminalTagColor)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(
+                                Capsule().fill(terminalTagColor.opacity(0.12))
+                            )
+
+                        Spacer(minLength: 0)
                     }
 
                     // Subtitle

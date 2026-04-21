@@ -1044,6 +1044,38 @@ actor SessionStore {
 
     // MARK: - History Loading
 
+    private static func sanitizedCodexPreview(_ text: String?, maxLength: Int) -> String? {
+        guard let text else { return nil }
+
+        var cleaned = text
+        cleaned = cleaned.replacingOccurrences(
+            of: #"<image\b[^>]*>"#,
+            with: "",
+            options: .regularExpression
+        )
+        cleaned = cleaned.replacingOccurrences(
+            of: #"</image>"#,
+            with: "",
+            options: .regularExpression
+        )
+        cleaned = cleaned.replacingOccurrences(
+            of: #"\[Image #[^\]]+\]"#,
+            with: "",
+            options: .regularExpression
+        )
+        cleaned = cleaned.replacingOccurrences(
+            of: #"\s+"#,
+            with: " ",
+            options: .regularExpression
+        ).trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !cleaned.isEmpty else { return nil }
+        if cleaned.count > maxLength {
+            return String(cleaned.prefix(maxLength - 3)) + "..."
+        }
+        return cleaned
+    }
+
     private func loadHistoryFromFile(sessionId: String, cwd: String) async {
         // Codex sessions: parse rollout JSONL instead of Claude JSONL
         if let transcriptPath = sessions[sessionId]?.codexTranscriptPath, !transcriptPath.isEmpty {
@@ -1052,11 +1084,11 @@ actor SessionStore {
             let lastUserMsg = messages.last(where: { $0.role == .user })
             let conversationInfo = ConversationInfo(
                 summary: nil,
-                lastMessage: messages.last?.textContent,
+                lastMessage: Self.sanitizedCodexPreview(messages.last?.textContent, maxLength: 80),
                 lastMessageRole: messages.last?.role.rawValue,
                 lastToolName: nil,
-                firstUserMessage: firstUserMsg?.textContent,
-                latestUserMessage: lastUserMsg?.textContent,
+                firstUserMessage: Self.sanitizedCodexPreview(firstUserMsg?.textContent, maxLength: 50),
+                latestUserMessage: Self.sanitizedCodexPreview(lastUserMsg?.textContent, maxLength: 60),
                 lastUserMessageDate: lastUserMsg?.timestamp
             )
             await process(.historyLoaded(
@@ -1196,11 +1228,11 @@ actor SessionStore {
             let lastUserMsg = messages.last(where: { $0.role == .user })
             let conversationInfo = ConversationInfo(
                 summary: nil,
-                lastMessage: messages.last?.textContent,
+                lastMessage: Self.sanitizedCodexPreview(messages.last?.textContent, maxLength: 80),
                 lastMessageRole: messages.last?.role.rawValue,
                 lastToolName: nil,
-                firstUserMessage: firstUserMsg?.textContent,
-                latestUserMessage: lastUserMsg?.textContent,
+                firstUserMessage: Self.sanitizedCodexPreview(firstUserMsg?.textContent, maxLength: 50),
+                latestUserMessage: Self.sanitizedCodexPreview(lastUserMsg?.textContent, maxLength: 60),
                 lastUserMessageDate: lastUserMsg?.timestamp
             )
             await self?.process(.historyLoaded(

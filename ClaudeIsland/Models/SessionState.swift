@@ -138,6 +138,41 @@ struct SessionState: Equatable, Identifiable, Sendable {
         return sessionId
     }
 
+    /// Whether this session is backed by the Codex CLI rather than Claude Code.
+    var isCodexSession: Bool {
+        if let transcriptPath = codexTranscriptPath, !transcriptPath.isEmpty {
+            return true
+        }
+        let app = terminalApp?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
+        return app == "codex"
+    }
+
+    /// Human-facing agent badge shown in the sessions list.
+    var agentTag: String {
+        isCodexSession ? "Codex" : "Claude"
+    }
+
+    /// Human-facing terminal badge shown in the sessions list.
+    var terminalTag: String {
+        if let wsId = cmuxWorkspaceId, !wsId.isEmpty {
+            return "cmux"
+        }
+        if let surfId = cmuxSurfaceId, !surfId.isEmpty {
+            return "cmux"
+        }
+        if isInTmux {
+            return "tmux"
+        }
+        if let app = terminalApp?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !app.isEmpty {
+            let lower = app.lowercased()
+            if lower != "codex" && lower != "claude" {
+                return app
+            }
+        }
+        return "Terminal"
+    }
+
     /// Display title: summary > latest user message > first user message > project name
     var displayTitle: String {
         conversationInfo.summary ?? conversationInfo.latestUserMessage ?? conversationInfo.firstUserMessage ?? projectName
