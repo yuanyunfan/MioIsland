@@ -957,10 +957,11 @@ private struct SettingsLanguageRow: View {
 }
 
 /// Settings-tab accessibility row: icon + label + sublabel + status pill
-/// (green dot + "已启用" when granted, "启用" button when not).
+/// (green dot + "已启用" when granted, "修复" button when not).
 private struct SettingsAccessibilityRow: View {
     let isLast: Bool
     @State private var isGranted = AXIsProcessTrusted()
+    @State private var isRepairing = false
 
     var body: some View {
         SettingRow(
@@ -979,23 +980,50 @@ private struct SettingsAccessibilityRow: View {
                         .foregroundColor(.white.opacity(0.55))
                 }
             } else {
-                Button {
-                    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
-                        NSWorkspace.shared.open(url)
+                HStack(spacing: 6) {
+                    // 主操作：一键修复（对付 ad-hoc 签名 CDHash 变化导致的 TCC 失效）
+                    Button {
+                        repair()
+                    } label: {
+                        Text(isRepairing ? L10n.repairing : L10n.repairPermission)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(.black)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(RoundedRectangle(cornerRadius: 6).fill(Theme.accent))
                     }
-                } label: {
-                    Text(L10n.enable)
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(.black)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(RoundedRectangle(cornerRadius: 6).fill(Theme.accent))
+                    .buttonStyle(.plain)
+                    .disabled(isRepairing)
+
+                    // 备用：打开系统设置（老行为）
+                    Button {
+                        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+                            NSWorkspace.shared.open(url)
+                        }
+                    } label: {
+                        Image(systemName: "arrow.up.forward.square")
+                            .font(.system(size: 11))
+                            .foregroundColor(.white.opacity(0.5))
+                            .padding(5)
+                            .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.05)))
+                    }
+                    .buttonStyle(.plain)
+                    .help(L10n.openAccessibilitySettings)
                 }
-                .buttonStyle(.plain)
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             isGranted = AXIsProcessTrusted()
+        }
+    }
+
+    private func repair() {
+        isRepairing = true
+        TCCPermissionFixer.resetAndRequest(.accessibility)
+        // 授权是异步的，短暂轮询后刷新状态
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+            isGranted = AXIsProcessTrusted()
+            isRepairing = false
         }
     }
 }
@@ -1453,6 +1481,13 @@ private struct CmuxConnectionTab: View {
 
             SettingsCard {
                 VStack(spacing: 8) {
+                    // 一键修复：升级后 ad-hoc 签名 CDHash 变化导致 TCC 失效时用
+                    repairButton(label: L10n.repairAccessibilityPermission, service: .accessibility)
+                    repairButton(label: L10n.repairAutomationPermission, service: .appleEvents)
+
+                    Divider().background(Color.white.opacity(0.06)).padding(.vertical, 2)
+
+                    // 备用通道：打开系统设置手动处理
                     permissionButton(label: L10n.openAccessibilitySettings, urlString: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
                     permissionButton(label: L10n.openAutomationSettings, urlString: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation")
 
@@ -1492,6 +1527,29 @@ private struct CmuxConnectionTab: View {
             }
         }
         .task { await refresh() }
+    }
+
+    @ViewBuilder
+    private func repairButton(label: String, service: TCCService) -> some View {
+        Button {
+            TCCPermissionFixer.resetAndRequest(service)
+            Task {
+                try? await Task.sleep(nanoseconds: 1_200_000_000)
+                await refresh()
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "wrench.and.screwdriver.fill").font(.system(size: 11))
+                Text(label).font(.system(size: 12, weight: .semibold))
+                Spacer()
+                Image(systemName: "chevron.right").font(.system(size: 9)).opacity(0.5)
+            }
+            .foregroundColor(.black)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(RoundedRectangle(cornerRadius: 7).fill(Theme.accent))
+        }
+        .buttonStyle(.plain)
     }
 
     private func requestAutomation() async {

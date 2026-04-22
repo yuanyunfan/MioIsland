@@ -224,6 +224,10 @@ enum L10n {
     static var testSendFailed: String { tr("Failed — check logs tab", "失败 — 请查看日志 tab") }
     static var openAccessibilitySettings: String { tr("Open Accessibility settings", "打开辅助功能设置") }
     static var openAutomationSettings: String { tr("Open Automation settings", "打开自动化设置") }
+    static var repairPermission: String { tr("Repair", "修复权限") }
+    static var repairing: String { tr("Repairing…", "修复中…") }
+    static var repairAccessibilityPermission: String { tr("Repair Accessibility permission", "修复辅助功能权限") }
+    static var repairAutomationPermission: String { tr("Repair Automation permission", "修复自动化权限") }
     static var refreshStatus: String { tr("Refresh", "刷新") }
     static var requestAutomationButton: String { tr("Request Automation permission", "请求自动化权限") }
     static var requestAutomationNoTerminal: String { tr("No supported terminal is running — start cmux/iTerm/Terminal first", "没有受支持的终端在运行 — 请先启动 cmux/iTerm/Terminal") }
