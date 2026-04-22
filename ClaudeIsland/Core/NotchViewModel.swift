@@ -167,11 +167,7 @@ class NotchViewModel: ObservableObject {
         case .completion(let entry):
             switch entry.variant {
             case .claudeStop:
-                // Notch WINDOW spans full screen width so the PixelCard
-                // background animation covers the entire top strip.
-                // The actual 600pt content card is centered on top by the
-                // view itself (see ClaudeStopVariantView).
-                return CGSize(width: screenRect.width, height: 210)
+                return CGSize(width: min(screenRect.width * 0.5, 600), height: 200)
             case .subagentDone(let subagents):
                 let rowHeight: CGFloat = 28
                 let padding: CGFloat = 120

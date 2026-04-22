@@ -35,13 +35,9 @@ struct ClaudeStopVariantView: View {
 
     var body: some View {
         ZStack {
-            // Pixel background fills the ENTIRE notch window (which is now
-            // full screen width) — user wants the dot animation to span the
-            // whole top strip, not just the inner card.
-            PixelCardBackground(variant: .blue, cornerRadius: 18)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // Pixel animation INSIDE the 600pt panel as a background layer.
+            PixelCardBackground(variant: .blue, cornerRadius: 14)
 
-            // Foreground content card — explicitly 600pt wide, centered.
             VStack(alignment: .leading, spacing: 10) {
                 header
                 summaryView
@@ -51,16 +47,7 @@ struct ClaudeStopVariantView: View {
                 phraseRow
                 terminalButtonRow
             }
-            .padding(.horizontal, 16).padding(.vertical, 14)
-            .frame(width: 600, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(Color(red: 0.05, green: 0.06, blue: 0.09).opacity(0.85))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14)
-                            .strokeBorder(Color.white.opacity(0.12), lineWidth: 0.6)
-                    )
-            )
+            .padding(.horizontal, 14).padding(.vertical, 12)
         }
         .onAppear { controller.setPanelVisible(true) }
         .onDisappear { controller.setPanelVisible(false) }
