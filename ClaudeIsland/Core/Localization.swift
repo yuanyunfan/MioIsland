@@ -209,6 +209,15 @@ enum L10n {
     static var pendingToolNeedsApproval: String { tr("Needs approval", "需授权") }
     static var pendingToolHighRiskHint: String { tr("High-risk operation — review diff in terminal", "高风险操作，请到终端查看 diff") }
 
+    // MARK: - Completion Panel — QuickReplyPhrasesEditor
+    static var qrEditorAdd: String { tr("Add phrase", "添加短语") }
+    static var qrEditorReset: String { tr("Reset to defaults", "恢复默认") }
+    static var qrEditorMaxHint: String { tr("Max 6 phrases", "最多 6 条") }
+    static var qrEditorMinHint: String { tr("Keep at least one phrase", "至少保留一条") }
+    static var qrEditorDeleteHint: String { tr("Delete", "删除") }
+    static var qrEditorSectionTitle: String { tr("Quick Reply Phrases", "快速应答短语") }
+    static var completionPanelEnabled: String { tr("Completion Panel", "任务完成面板") }
+
     // MARK: - Settings window
     static var systemSettings: String { tr("System Settings", "系统设置") }
     static var openSettings: String { tr("Settings", "设置") }
