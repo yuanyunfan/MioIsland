@@ -32,6 +32,12 @@ final class CompletionPanelController: NSObject, ObservableObject {
     private var previousActiveTaskIds: [String: Set<String>] = [:]
     private var previousTaskContextByToolId: [String: [String: TaskContext]] = [:]
     private var lastKnownSessions: [String: SessionState] = [:]
+    /// Per-session `lastActivity` snapshot from prev tick. Used as a
+    /// monotonic marker — if a session is in .waitingForInput AND its
+    /// lastActivity advanced since last snapshot, treat it as a fresh
+    /// Stop event even if the phase-diff test missed it (SessionStore
+    /// publisher can coalesce rapid processing→waiting→processing frames).
+    private var previousLastActivityByStableId: [String: Date] = [:]
 
     // MARK: - Init
 
@@ -105,6 +111,7 @@ final class CompletionPanelController: NSObject, ObservableObject {
         previousActiveTaskIds = previousActiveTaskIds.filter { activeIds.contains($0.key) }
         previousTaskContextByToolId = previousTaskContextByToolId.filter { activeIds.contains($0.key) }
         previousPhaseByStableId = previousPhaseByStableId.filter { activeIds.contains($0.key) }
+        previousLastActivityByStableId = previousLastActivityByStableId.filter { activeIds.contains($0.key) }
 
         if !didCaptureBaseline {
             previousWaitingIds = waitingIds
@@ -112,6 +119,7 @@ final class CompletionPanelController: NSObject, ObservableObject {
                 previousPhaseByStableId[session.stableId] = session.phase
                 previousActiveTaskIds[session.stableId] = Set(session.subagentState.activeTasks.keys)
                 previousTaskContextByToolId[session.stableId] = session.subagentState.activeTasks
+                previousLastActivityByStableId[session.stableId] = session.lastActivity
             }
             didCaptureBaseline = true
             return
@@ -129,8 +137,26 @@ final class CompletionPanelController: NSObject, ObservableObject {
             let nowSubs = Set(session.subagentState.activeTasks.keys)
             let finishedSubs = prevSubs.subtracting(nowSubs)
 
-            let transitionedToWaiting = (prevPhase == .processing || prevPhase == .compacting)
+            // Phase-diff detection (strict).
+            let phaseTransitionedToWaiting = (prevPhase == .processing || prevPhase == .compacting)
                 && session.phase == .waitingForInput
+
+            // Activity-marker detection (loose). Catches cases where SessionStore
+            // publisher coalesced processing → waitingForInput → processing frames:
+            // session is currently waiting AND its lastActivity advanced since
+            // last snapshot AND we don't already have an entry for this session
+            // (avoid duplicate enqueues when phase-diff already fired).
+            let prevActivity = previousLastActivityByStableId[session.stableId]
+            let activityAdvanced = prevActivity.map { $0 < session.lastActivity } ?? false
+            let isWaiting = session.phase == .waitingForInput
+            let alreadyQueued = state.front?.stableId == session.stableId
+                || state.pending.contains(where: { $0.stableId == session.stableId })
+            let activityTriggered = isWaiting && activityAdvanced && !alreadyQueued
+
+            let transitionedToWaiting = phaseTransitionedToWaiting || activityTriggered
+            if activityTriggered && !phaseTransitionedToWaiting {
+                DebugLogger.log("CP/transition", "activity-triggered session=\(session.stableId.prefix(8)) prevPhase=\(String(describing: prevPhase)) currentPhase=waitingForInput")
+            }
 
             let transitionedToApproval: Bool = {
                 guard let prev = prevPhase else { return false }
@@ -197,14 +223,17 @@ final class CompletionPanelController: NSObject, ObservableObject {
         var newPhase: [String: SessionPhase] = [:]
         var newSubs: [String: Set<String>] = [:]
         var newTaskCtx: [String: [String: TaskContext]] = [:]
+        var newActivity: [String: Date] = [:]
         for session in sessions {
             newPhase[session.stableId] = session.phase
             newSubs[session.stableId] = Set(session.subagentState.activeTasks.keys)
             newTaskCtx[session.stableId] = session.subagentState.activeTasks
+            newActivity[session.stableId] = session.lastActivity
         }
         previousPhaseByStableId = newPhase
         previousActiveTaskIds = newSubs
         previousTaskContextByToolId = newTaskCtx
+        previousLastActivityByStableId = newActivity
         previousWaitingIds = Set(sessions.filter { $0.phase == .waitingForInput }.map(\.stableId))
     }
 
