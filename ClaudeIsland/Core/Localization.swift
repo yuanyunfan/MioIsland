@@ -192,6 +192,12 @@ enum L10n {
     static var enable: String { tr("Enable", "启用") }
     static var enabled: String { tr("On", "已开启") }
 
+    // MARK: - Completion Panel — phrase defaults
+    static var qrPhraseContinue: String { tr("Continue", "继续") }
+    static var qrPhraseOK: String { tr("OK", "好的") }
+    static var qrPhraseExplain: String { tr("Explain more", "解释一下") }
+    static var qrPhraseRetry: String { tr("Retry", "再试一次") }
+
     // MARK: - Settings window
     static var systemSettings: String { tr("System Settings", "系统设置") }
     static var openSettings: String { tr("Settings", "设置") }
