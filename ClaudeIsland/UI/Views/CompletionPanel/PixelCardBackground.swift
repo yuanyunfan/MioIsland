@@ -2,156 +2,292 @@
 //  PixelCardBackground.swift
 //  ClaudeIsland
 //
-//  Reusable dot-grid "pixel card" background inspired by
-//  reactbits.dev/components/pixel-card. A regular grid of tiny dots,
-//  most dark, a few accent-colored. On hover, dots within a radius
-//  around the mouse brighten and a slow wave pulses across the grid.
+//  Faithful SwiftUI port of reactbits.dev/components/pixel-card.
 //
-//  Usage:
-//      .background(PixelCardBackground(cornerRadius: 14))
+//  Each pixel starts at size 0. On hover, pixels "appear" — size grows
+//  from 0 to a random maxSize, but after a per-pixel delay proportional
+//  to its distance from the card center. Once a pixel reaches maxSize,
+//  it "shimmers" (size oscillates min↔max at the variant speed). On
+//  hover-exit, pixels "disappear" — size shrinks back to 0. When all
+//  are idle (size 0) the animation loop stops.
+//
+//  Plus a radial dark-center overlay (::before in the CSS source) that
+//  fades in 0→1 over ~800ms on hover.
 //
 
 import SwiftUI
+import Combine
+#if canImport(AppKit)
+import AppKit
+#endif
+
+// MARK: - Variant
+
+struct PixelCardVariant {
+    var gap: CGFloat = 10
+    var speedParam: Int = 25          // maps through throttle (×0.001)
+    var colors: [Color] = [
+        Color(hex: 0xE0F2FE),         // sky-100
+        Color(hex: 0x7DD3FC),         // sky-300
+        Color(hex: 0x0EA5E9)          // sky-500
+    ]
+    var radialDarkColor: Color = Color(hex: 0x09090B)
+    var maxSizeInteger: CGFloat = 2   // upper bound for pixel maxSize
+
+    static let blue    = PixelCardVariant()
+    static let `default` = PixelCardVariant(
+        gap: 5, speedParam: 35,
+        colors: [Color(hex: 0xF8FAFC), Color(hex: 0xF1F5F9), Color(hex: 0xCBD5E1)]
+    )
+    static let yellow  = PixelCardVariant(
+        gap: 3, speedParam: 20,
+        colors: [Color(hex: 0xFEF08A), Color(hex: 0xFDE047), Color(hex: 0xEAB308)]
+    )
+    static let pink    = PixelCardVariant(
+        gap: 6, speedParam: 80,
+        colors: [Color(hex: 0xFECDD3), Color(hex: 0xFDA4AF), Color(hex: 0xE11D48)]
+    )
+}
+
+extension Color {
+    init(hex: UInt32) {
+        let r = Double((hex >> 16) & 0xFF) / 255
+        let g = Double((hex >>  8) & 0xFF) / 255
+        let b = Double((hex >>  0) & 0xFF) / 255
+        self.init(red: r, green: g, blue: b)
+    }
+}
+
+// MARK: - Pixel
+
+private struct Pixel {
+    let x: CGFloat
+    let y: CGFloat
+    let color: Color
+    let speed: CGFloat
+    let sizeStep: CGFloat
+    let minSize: CGFloat = 0.5
+    let maxSizeInteger: CGFloat
+    let maxSize: CGFloat
+    let delay: CGFloat
+    let counterStep: CGFloat
+
+    var size: CGFloat = 0
+    var counter: CGFloat = 0
+    var isIdle: Bool = false
+    var isReverse: Bool = false
+    var isShimmer: Bool = false
+
+    mutating func appear() {
+        isIdle = false
+        if counter <= delay {
+            counter += counterStep
+            return
+        }
+        if size >= maxSize { isShimmer = true }
+        if isShimmer {
+            shimmer()
+        } else {
+            size += sizeStep
+        }
+    }
+
+    mutating func disappear() {
+        isShimmer = false
+        counter = 0
+        if size <= 0 {
+            isIdle = true
+            return
+        }
+        size -= 0.1
+    }
+
+    private mutating func shimmer() {
+        if size >= maxSize { isReverse = true }
+        else if size <= minSize { isReverse = false }
+        if isReverse { size -= speed } else { size += speed }
+    }
+}
+
+// MARK: - Model (reference type — mutates in place, publishes a tick)
+
+@MainActor
+private final class PixelGridModel: ObservableObject {
+    @Published private(set) var tick: Int = 0
+
+    fileprivate var pixels: [Pixel] = []
+    private var mode: Mode = .idle
+    private var frameTimer: Timer?
+
+    private enum Mode { case idle, appearing, disappearing }
+
+    func rebuild(size: CGSize, variant: PixelCardVariant, reducedMotion: Bool) {
+        let w = size.width, h = size.height
+        guard w > 0, h > 0 else { pixels = []; return }
+
+        let gap = variant.gap
+        let cols = stride(from: 0.0, to: w, by: gap)
+        let rows = stride(from: 0.0, to: h, by: gap)
+        let cx = w / 2, cy = h / 2
+        let effectiveSpeed = Self.effectiveSpeed(variant.speedParam, reducedMotion: reducedMotion)
+
+        var next: [Pixel] = []
+        next.reserveCapacity(Int(w / gap) * Int(h / gap))
+
+        for x in cols {
+            for y in rows {
+                let color = variant.colors.randomElement() ?? .white
+                let dx = x - cx, dy = y - cy
+                let distance = sqrt(dx * dx + dy * dy)
+                let delay = reducedMotion ? 0 : distance
+                let speed = CGFloat.random(in: 0.1...0.9) * effectiveSpeed
+                let sizeStep = CGFloat.random(in: 0..<0.4)
+                let maxSize = CGFloat.random(in: 0.5...variant.maxSizeInteger)
+                let counterStep = CGFloat.random(in: 0..<4) + (w + h) * 0.01
+
+                next.append(Pixel(
+                    x: x, y: y, color: color,
+                    speed: speed, sizeStep: sizeStep,
+                    maxSizeInteger: variant.maxSizeInteger, maxSize: maxSize,
+                    delay: delay, counterStep: counterStep
+                ))
+            }
+        }
+        pixels = next
+        // Force redraw of empty state
+        tick &+= 1
+    }
+
+    func startAppear() {
+        mode = .appearing
+        startLoop()
+    }
+
+    func startDisappear() {
+        mode = .disappearing
+        startLoop()
+    }
+
+    private func startLoop() {
+        if frameTimer != nil { return }
+        // 60fps timer. NSWindow vsync coupling isn't critical for dot
+        // animation — 16.67ms is smooth enough.
+        frameTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.advance() }
+        }
+    }
+
+    private func stopLoop() {
+        frameTimer?.invalidate()
+        frameTimer = nil
+    }
+
+    private func advance() {
+        switch mode {
+        case .idle:
+            stopLoop(); return
+        case .appearing:
+            for i in 0..<pixels.count { pixels[i].appear() }
+        case .disappearing:
+            var allIdle = true
+            for i in 0..<pixels.count {
+                pixels[i].disappear()
+                if !pixels[i].isIdle { allIdle = false }
+            }
+            if allIdle { mode = .idle; stopLoop() }
+        }
+        tick &+= 1
+    }
+
+    private static func effectiveSpeed(_ v: Int, reducedMotion: Bool) -> CGFloat {
+        let throttle: CGFloat = 0.001
+        if v <= 0 || reducedMotion { return 0 }
+        if v >= 100 { return 100 * throttle }
+        return CGFloat(v) * throttle
+    }
+}
+
+
+// MARK: - View
 
 struct PixelCardBackground: View {
+    var variant: PixelCardVariant = .blue
     var cornerRadius: CGFloat = 14
-    var gridSpacing: CGFloat = 5
-    var dotSize: CGFloat = 1.4
-    var baseColor: Color = Color(red: 0.06, green: 0.07, blue: 0.10)
-    var accentColors: [Color] = [
-        Color(red: 0xCA/255, green: 0xFF/255, blue: 0x00/255),   // lime
-        Color(red: 0x7A/255, green: 0xE6/255, blue: 0xFF/255),   // cyan
-        Color(red: 0xB4/255, green: 0xA0/255, blue: 0xFF/255)    // purple
-    ]
-    /// Radius around cursor where dots brighten (points).
-    var spotlightRadius: CGFloat = 90
+    var baseFill: Color = Color(red: 0.06, green: 0.07, blue: 0.10)
+    /// Whether to honor macOS reduced-motion setting. (Currently always true.)
+    var respectsReducedMotion: Bool = true
 
-    @State private var mouseLocation: CGPoint? = nil
+    @StateObject private var grid = PixelGridModel()
     @State private var isHovering: Bool = false
-    @State private var hoverIntensity: Double = 0
-    @State private var pulsePhase: Double = 0
 
     var body: some View {
         GeometryReader { geo in
             ZStack {
-                // Solid base underlay — Canvas draws dots on top
+                // 1. Solid base
                 RoundedRectangle(cornerRadius: cornerRadius)
                     .fill(
                         LinearGradient(
-                            colors: [
-                                baseColor,
-                                baseColor.opacity(0.92)
-                            ],
+                            colors: [baseFill, baseFill.opacity(0.92)],
                             startPoint: .topLeading, endPoint: .bottomTrailing
                         )
                     )
 
-                // Animated dot grid
-                TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: false)) { timeline in
-                    Canvas { context, size in
-                        let now = timeline.date.timeIntervalSinceReferenceDate
-                        // Slow breathing phase so even without hover, the grid has life
-                        let breathe = (sin(now * 0.7) * 0.5 + 0.5)
-                        let cols = Int(size.width / gridSpacing)
-                        let rows = Int(size.height / gridSpacing)
-
-                        // Stable pseudo-random seed per (col,row) — drives accent picks + alpha variance
-                        for r in 0..<rows {
-                            for c in 0..<cols {
-                                let x = CGFloat(c) * gridSpacing + gridSpacing / 2
-                                let y = CGFloat(r) * gridSpacing + gridSpacing / 2
-
-                                let seed = abs((c &* 73) ^ (r &* 151)) % 100
-
-                                // Base brightness — most dots are subtle, a few are brighter
-                                var alpha = 0.07 + (Double(seed) / 100.0) * 0.10
-
-                                // Ambient wave — a diagonal ripple pulses slowly
-                                let wavePhase = (Double(c + r) * 0.22) + now * 1.1
-                                let wave = (sin(wavePhase) * 0.5 + 0.5) * 0.15
-                                alpha += wave * (0.4 + breathe * 0.6)
-
-                                // Mouse spotlight — dots within `spotlightRadius` glow
-                                if let mouse = mouseLocation {
-                                    let dx = x - mouse.x
-                                    let dy = y - mouse.y
-                                    let dist = sqrt(dx * dx + dy * dy)
-                                    if dist < spotlightRadius {
-                                        let t = 1 - (dist / spotlightRadius)
-                                        // Smoothstep-ish falloff
-                                        let falloff = t * t * (3 - 2 * t)
-                                        alpha += Double(falloff) * 0.85 * hoverIntensity
-                                    }
-                                }
-
-                                // Clamp
-                                alpha = min(alpha, 1.0)
-
-                                // Accent color for ~8% of dots, weighted by seed
-                                let isAccent = seed > 91
-                                let color: Color
-                                if isAccent {
-                                    let i = seed % accentColors.count
-                                    color = accentColors[i]
-                                } else {
-                                    color = .white
-                                }
-
-                                let rect = CGRect(
-                                    x: x - dotSize / 2,
-                                    y: y - dotSize / 2,
-                                    width: dotSize,
-                                    height: dotSize
-                                )
-                                context.fill(
-                                    Path(ellipseIn: rect),
-                                    with: .color(color.opacity(alpha))
-                                )
-                            }
-                        }
+                // 2. Pixel canvas — observes `tick` for redraw
+                Canvas { ctx, _ in
+                    _ = grid.tick   // trigger redraw on publish
+                    let max = variant.maxSizeInteger
+                    for pixel in grid.pixels {
+                        guard pixel.size > 0 else { continue }
+                        let offset = max * 0.5 - pixel.size * 0.5
+                        let rect = CGRect(
+                            x: pixel.x + offset,
+                            y: pixel.y + offset,
+                            width: pixel.size,
+                            height: pixel.size
+                        )
+                        ctx.fill(Path(rect), with: .color(pixel.color))
                     }
                 }
                 .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
 
-                // Gradient border
+                // 3. Radial dark-center overlay (::before)
+                RadialGradient(
+                    colors: [variant.radialDarkColor, variant.radialDarkColor.opacity(0)],
+                    center: .center,
+                    startRadius: 0,
+                    endRadius: min(geo.size.width, geo.size.height) * 0.55
+                )
+                .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+                .opacity(isHovering ? 1 : 0)
+                .animation(.easeOut(duration: 0.8), value: isHovering)
+                .allowsHitTesting(false)
+
+                // 4. Border — subtle → brighter on hover
                 RoundedRectangle(cornerRadius: cornerRadius)
                     .strokeBorder(
-                        LinearGradient(
-                            colors: isHovering
-                                ? [
-                                    Color(red: 0xCA/255, green: 0xFF/255, blue: 0x00/255).opacity(0.35),
-                                    Color(red: 0x7A/255, green: 0xE6/255, blue: 0xFF/255).opacity(0.18),
-                                    Color.white.opacity(0.08)
-                                  ]
-                                : [
-                                    Color.white.opacity(0.12),
-                                    Color.white.opacity(0.04)
-                                  ],
-                            startPoint: .topLeading, endPoint: .bottomTrailing
-                        ),
+                        isHovering
+                            ? Color(hex: 0x7DD3FC).opacity(0.35)
+                            : Color.white.opacity(0.10),
                         lineWidth: isHovering ? 0.9 : 0.6
                     )
+                    .animation(.easeOut(duration: 0.25), value: isHovering)
             }
-            // Track mouse continuously while it's over the card
-            .onContinuousHover { phase in
-                switch phase {
-                case .active(let location):
-                    mouseLocation = location
-                    if !isHovering {
-                        withAnimation(.easeOut(duration: 0.25)) {
-                            isHovering = true
-                            hoverIntensity = 1.0
-                        }
-                    }
-                case .ended:
-                    mouseLocation = nil
-                    withAnimation(.easeOut(duration: 0.4)) {
-                        isHovering = false
-                        hoverIntensity = 0
-                    }
+            .onAppear {
+                let reduced = respectsReducedMotion && NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+                grid.rebuild(size: geo.size, variant: variant, reducedMotion: reduced)
+            }
+            .onChange(of: geo.size) { _, newSize in
+                let reduced = respectsReducedMotion && NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+                grid.rebuild(size: newSize, variant: variant, reducedMotion: reduced)
+            }
+            .onHover { hovering in
+                isHovering = hovering
+                if hovering {
+                    grid.startAppear()
+                } else {
+                    grid.startDisappear()
                 }
             }
-            .animation(.easeOut(duration: 0.25), value: mouseLocation)
         }
     }
 }
