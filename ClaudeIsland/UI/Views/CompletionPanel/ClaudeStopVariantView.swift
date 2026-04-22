@@ -12,7 +12,6 @@ struct ClaudeStopVariantView: View {
     let entry: CompletionEntry
     let summary: String
     @ObservedObject private var controller = CompletionPanelController.shared
-    @State private var isCodex: Bool = false
 
     private var phrases: [QuickReplyPhrase] { QuickReplyPhrases.current }
 
@@ -41,11 +40,8 @@ struct ClaudeStopVariantView: View {
             if let err = controller.state.sendError, err.stableId == entry.stableId {
                 errorRow(err.message)
             }
-            if !isCodex { phraseRow }
+            phraseRow
             terminalButtonRow
-        }
-        .task(id: entry.stableId) {
-            isCodex = (await SessionStore.shared.session(withStableId: entry.stableId)?.codexTranscriptPath != nil)
         }
         .padding(.horizontal, 14).padding(.vertical, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
