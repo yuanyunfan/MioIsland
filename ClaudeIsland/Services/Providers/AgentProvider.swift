@@ -54,6 +54,10 @@ protocol AgentProvider: AnyObject, Sendable {
 // MARK: - Default Event Submission
 
 extension AgentProvider {
+    /// Static configuration for this provider (forwarded from the enum).
+    /// Default implementation means provider classes don't have to re-declare it.
+    var metadata: ProviderMetadata { providerType.metadata }
+
     /// Submit a HookEvent to SessionStore — the unified path for all providers.
     /// Providers construct a HookEvent with their `source` field set, then call this.
     func submitEvent(_ event: HookEvent) async {

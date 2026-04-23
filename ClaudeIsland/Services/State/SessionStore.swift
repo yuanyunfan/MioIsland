@@ -40,9 +40,14 @@ actor SessionStore {
     /// Publisher for session state changes (nonisolated for Combine subscription from any context)
     private nonisolated(unsafe) let sessionsSubject = CurrentValueSubject<[SessionState], Never>([])
 
-    /// Public publisher for UI subscription
+    /// Public publisher for UI subscription.
+    /// Note: do NOT chain `.throttle(scheduler: DispatchQueue.main, ...)` here —
+    /// it forms a feedback loop with SwiftUI's main-thread layout pass and pegs
+    /// CPU at 100%. Subscribers throttle/dedup themselves if needed.
     nonisolated var sessionsPublisher: AnyPublisher<[SessionState], Never> {
-        sessionsSubject.eraseToAnyPublisher()
+        sessionsSubject
+            .removeDuplicates()
+            .eraseToAnyPublisher()
     }
 
     /// Get current sessions snapshot
@@ -174,9 +179,11 @@ actor SessionStore {
             session.cmuxSurfaceId = surfId
         }
 
-        // Provider-specific metadata and terminal app detection
-        if session.providerType.supportsProcessTree {
-            // Claude Code: detect terminal from process tree
+        // Provider-specific metadata and terminal app detection.
+        // Driven entirely by ProviderMetadata — adding a new provider requires no edits here.
+        let providerMeta = session.providerType.metadata
+        if providerMeta.supportsProcessTree {
+            // e.g. Claude Code: detect terminal from process tree
             if let pid = event.pid {
                 let tree = ProcessTreeBuilder.shared.buildTree()
                 session.isInTmux = ProcessTreeBuilder.shared.isInTmux(pid: pid, tree: tree)
@@ -195,20 +202,16 @@ actor SessionStore {
                 }
             }
         } else {
-            // Non-process-tree providers: set terminal app from provider display name
-            switch session.providerType {
-            case .codex:
-                session.terminalApp = "Codex"
-                if let transcriptPath = event.transcriptPath, !transcriptPath.isEmpty {
-                    session.codexTranscriptPath = transcriptPath
-                }
-            case .opencode:
-                session.terminalApp = "OpenCode"
-            case .hermes:
-                session.terminalApp = "Hermes"
-            case .claudeCode:
-                break  // handled above
+            // Non-process-tree providers: use the provider's hardcoded label.
+            if let label = providerMeta.defaultTerminalAppName {
+                session.terminalApp = label
             }
+        }
+        // Codex carries its rollout transcript path on every hook event — capture it
+        // regardless of process-tree detection so subsequent file syncs find it.
+        if providerMeta.transcriptKind == .codexRollout,
+           let transcriptPath = event.transcriptPath, !transcriptPath.isEmpty {
+            session.codexTranscriptPath = transcriptPath
         }
         if let tty = event.tty {
             session.tty = tty.replacingOccurrences(of: "/dev/", with: "")
@@ -257,8 +260,8 @@ actor SessionStore {
         }
 
         // Parse conversationInfo only when needed (not on every event — too expensive for large JSONL)
-        // Only Claude Code sessions have Claude JSONL files for parsing
-        if session.providerType == .claudeCode &&
+        // Only providers backed by Claude JSONL files use ConversationParser.
+        if providerMeta.transcriptKind == .claudeJSONL &&
            (session.conversationInfo.firstUserMessage == nil ||
            (session.phase == .waitingForInput && session.conversationInfo.lastMessage == nil)) {
             DebugLogger.log("Store", "Parsing conversationInfo for \(sessionId.prefix(8))")
@@ -274,20 +277,20 @@ actor SessionStore {
 
         sessions[sessionId] = session
 
-        // Schedule file sync based on provider type
-        switch session.providerType {
-        case .claudeCode:
+        // Schedule file sync based on the provider's transcript kind.
+        // No per-provider switch: dispatch is on TranscriptKind, which is itself just data.
+        switch providerMeta.transcriptKind {
+        case .none:
+            // SSE / inline-message providers push chat history via HookEvent — no file to sync.
+            break
+        case .claudeJSONL:
             if event.shouldSyncFile {
                 scheduleFileSync(sessionId: sessionId, cwd: event.cwd)
             }
-        case .codex:
-            // Codex: sync chat history from rollout JSONL instead of Claude JSONL
+        case .codexRollout:
             if let transcriptPath = session.codexTranscriptPath, event.shouldSyncFile {
                 scheduleCodexHistorySync(sessionId: sessionId, transcriptPath: transcriptPath)
             }
-        case .opencode, .hermes:
-            // SSE providers push chat history directly via HookEvent, no file sync needed
-            break
         }
     }
 
@@ -311,49 +314,28 @@ actor SessionStore {
     private func processInlineMessages(event: HookEvent, session: inout SessionState) {
         guard let message = event.message, !message.isEmpty else { return }
 
-        let itemId = "\(event.sessionId)-\(event.event)-\(Int(Date().timeIntervalSince1970 * 1000))"
+        let itemId = "\(event.sessionId)-\(event.event)-\(UUID().uuidString)"
+        let now = Date()
 
         switch event.event {
         case "UserPromptSubmit":
-            // User message
-            let item = ChatHistoryItem(id: itemId, type: .user(message), timestamp: Date())
-            session.chatItems.append(item)
-            // Update conversationInfo
+            session.chatItems.append(
+                ChatHistoryItem(id: itemId, type: .user(message), timestamp: now)
+            )
+            session.conversationInfo.lastMessage = message
+            session.conversationInfo.lastMessageRole = "user"
+            session.conversationInfo.latestUserMessage = message
+            session.conversationInfo.lastUserMessageDate = now
             if session.conversationInfo.firstUserMessage == nil {
-                session.conversationInfo = ConversationInfo(
-                    summary: nil,
-                    lastMessage: message,
-                    lastMessageRole: "user",
-                    lastToolName: nil,
-                    firstUserMessage: message,
-                    latestUserMessage: message,
-                    lastUserMessageDate: Date()
-                )
-            } else {
-                session.conversationInfo = ConversationInfo(
-                    summary: session.conversationInfo.summary,
-                    lastMessage: message,
-                    lastMessageRole: "user",
-                    lastToolName: session.conversationInfo.lastToolName,
-                    firstUserMessage: session.conversationInfo.firstUserMessage,
-                    latestUserMessage: message,
-                    lastUserMessageDate: Date()
-                )
+                session.conversationInfo.firstUserMessage = message
             }
 
         case "Stop":
-            // Assistant response
-            let item = ChatHistoryItem(id: itemId, type: .assistant(message), timestamp: Date())
-            session.chatItems.append(item)
-            session.conversationInfo = ConversationInfo(
-                summary: session.conversationInfo.summary,
-                lastMessage: message,
-                lastMessageRole: "assistant",
-                lastToolName: session.conversationInfo.lastToolName,
-                firstUserMessage: session.conversationInfo.firstUserMessage,
-                latestUserMessage: session.conversationInfo.latestUserMessage,
-                lastUserMessageDate: session.conversationInfo.lastUserMessageDate
+            session.chatItems.append(
+                ChatHistoryItem(id: itemId, type: .assistant(message), timestamp: now)
             )
+            session.conversationInfo.lastMessage = message
+            session.conversationInfo.lastMessageRole = "assistant"
 
         default:
             break
@@ -1158,8 +1140,8 @@ actor SessionStore {
     }
 
     private func loadHistoryFromFile(sessionId: String, cwd: String) async {
-        // Codex sessions: parse rollout JSONL instead of Claude JSONL
-        if sessions[sessionId]?.providerType == .codex,
+        // Codex rollout transcripts: parse rollout JSONL instead of Claude JSONL
+        if sessions[sessionId]?.providerType.metadata.transcriptKind == .codexRollout,
            let transcriptPath = sessions[sessionId]?.codexTranscriptPath, !transcriptPath.isEmpty {
             let messages = await CodexChatHistoryParser.shared.parse(transcriptPath: transcriptPath)
             let firstUserMsg = messages.first(where: { $0.role == .user })

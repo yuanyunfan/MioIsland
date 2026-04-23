@@ -93,24 +93,59 @@ final class HermesProvider: AgentProvider, @unchecked Sendable {
         }
 
 
+        def _first_line(text, limit=120):
+            if text is None:
+                return ""
+            return str(text).strip().split("\\n")[0][:limit]
+
+
+        # Per-tool extractors. Each returns a short human-readable string
+        # describing what the tool did; falls back to generic handling if absent.
+        # Add a new tool by adding a key here — no other code needs to change.
+        TOOL_EXTRACTORS = {
+            "terminal":  lambda d: _first_line(d.get("output") or d.get("command")),
+            "bash":      lambda d: _first_line(d.get("output") or d.get("command")),
+            "shell":     lambda d: _first_line(d.get("output") or d.get("command")),
+            "read":      lambda d: _first_line(d.get("path") or d.get("file_path") or d.get("file_content")),
+            "read_file": lambda d: _first_line(d.get("path") or d.get("file_path") or d.get("file_content")),
+            "write":     lambda d: _first_line(d.get("path") or d.get("file_path")),
+            "edit":      lambda d: _first_line(d.get("path") or d.get("file_path")),
+            "grep":      lambda d: (
+                f"{len(d['matches'])} match(es) for {d.get('pattern','')}"
+                if isinstance(d.get("matches"), list)
+                else _first_line(d.get("pattern") or d.get("output"))
+            ),
+            "glob":      lambda d: _first_line(d.get("pattern") or d.get("output")),
+        }
+
+
         def _extract_description(tool_name, result):
             data = result
             if isinstance(result, str):
                 try:
                     data = json.loads(result)
                 except (json.JSONDecodeError, TypeError):
-                    first_line = result.strip().split("\\n")[0]
-                    return first_line[:120]
-            if isinstance(data, dict):
-                output = data.get("output", "")
-                if output:
-                    first_line = str(output).strip().split("\\n")[0]
-                    return first_line[:120]
-                error = data.get("error")
-                if error:
-                    return f"Error: {str(error)[:100]}"
-                return str(data)[:120]
-            return str(result)[:120]
+                    return _first_line(result)
+            if not isinstance(data, dict):
+                return _first_line(data)
+
+            # Errors take priority across all tools
+            error = data.get("error")
+            if error:
+                return f"Error: {_first_line(error, 100)}"
+
+            extractor = TOOL_EXTRACTORS.get((tool_name or "").lower())
+            if extractor:
+                desc = extractor(data)
+                if desc:
+                    return desc
+
+            # Generic fallback: try common output-shaped fields in order
+            for key in ("output", "message", "description", "summary", "content"):
+                value = data.get(key)
+                if value:
+                    return _first_line(value)
+            return _first_line(json.dumps(data, ensure_ascii=False))
 
 
         def _send(state):

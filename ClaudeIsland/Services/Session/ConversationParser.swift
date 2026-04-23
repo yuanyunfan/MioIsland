@@ -10,13 +10,13 @@ import Foundation
 import os.log
 
 struct ConversationInfo: Equatable {
-    let summary: String?
-    let lastMessage: String?
-    let lastMessageRole: String?  // "user", "assistant", or "tool"
-    let lastToolName: String?  // Tool name if lastMessageRole is "tool"
-    let firstUserMessage: String?  // Fallback title when no summary
-    let latestUserMessage: String?  // Most recent user text message
-    let lastUserMessageDate: Date?  // Timestamp of last user message (for stable sorting)
+    var summary: String?
+    var lastMessage: String?
+    var lastMessageRole: String?  // "user", "assistant", or "tool"
+    var lastToolName: String?  // Tool name if lastMessageRole is "tool"
+    var firstUserMessage: String?  // Fallback title when no summary
+    var latestUserMessage: String?  // Most recent user text message
+    var lastUserMessageDate: Date?  // Timestamp of last user message (for stable sorting)
 }
 
 actor ConversationParser {

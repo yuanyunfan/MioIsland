@@ -20,7 +20,6 @@ class ClaudeSessionMonitor: ObservableObject {
 
     init() {
         SessionStore.shared.sessionsPublisher
-            .removeDuplicates()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] sessions in
                 self?.updateFromSessions(sessions)

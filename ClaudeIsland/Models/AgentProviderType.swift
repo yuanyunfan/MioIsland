@@ -3,10 +3,41 @@
 //  ClaudeIsland
 //
 //  Identifies which AI agent tool a session belongs to.
-//  Adding a new provider only requires a new case here + a Provider implementation.
+//  Adding a new provider only requires:
+//    1. A new case here
+//    2. A new entry in `metadata`
+//    3. A runtime AgentProvider implementation
+//  SessionStore reads ProviderMetadata only — no per-provider switches required.
 //
 
 import Foundation
+
+/// Static, per-provider configuration consumed by SessionStore.
+/// Adding a new provider type means filling out this struct, not editing SessionStore.
+struct ProviderMetadata: Sendable {
+    let displayName: String
+    /// Whether chat history lives in a file we parse incrementally.
+    let usesFileSync: Bool
+    /// Whether terminal app can be inferred via process tree walk.
+    let supportsProcessTree: Bool
+    /// Whether the session attaches to a local terminal (vs remote/Discord/web).
+    let hasLocalTerminal: Bool
+    /// Hardcoded terminal-app label for non-process-tree providers.
+    /// nil means "rely on process tree / hook hint".
+    let defaultTerminalAppName: String?
+    /// What backing transcript file (if any) carries chat history.
+    let transcriptKind: TranscriptKind
+}
+
+/// How a provider's chat history is materialized.
+enum TranscriptKind: Sendable, Equatable {
+    /// No transcript file — chat history is pushed inline via HookEvent.message.
+    case none
+    /// Standard Claude Code JSONL under ~/.claude/projects/.
+    case claudeJSONL
+    /// Codex rollout JSONL whose path arrives in HookEvent.transcriptPath.
+    case codexRollout
+}
 
 /// All supported AI agent provider types
 enum AgentProviderType: String, Codable, Sendable, CaseIterable {
@@ -15,45 +46,55 @@ enum AgentProviderType: String, Codable, Sendable, CaseIterable {
     case opencode = "opencode"
     case hermes = "hermes"
 
-    /// User-visible display name
-    var displayName: String {
+    /// Single source of truth for per-provider configuration.
+    /// SessionStore reads this — never branches on the enum value.
+    var metadata: ProviderMetadata {
         switch self {
-        case .claudeCode: "Claude Code"
-        case .codex: "Codex"
-        case .opencode: "OpenCode"
-        case .hermes: "Hermes"
+        case .claudeCode:
+            return ProviderMetadata(
+                displayName: "Claude Code",
+                usesFileSync: true,
+                supportsProcessTree: true,
+                hasLocalTerminal: true,
+                defaultTerminalAppName: nil,
+                transcriptKind: .claudeJSONL
+            )
+        case .codex:
+            return ProviderMetadata(
+                displayName: "Codex",
+                usesFileSync: true,
+                supportsProcessTree: false,
+                hasLocalTerminal: true,
+                defaultTerminalAppName: "Codex",
+                transcriptKind: .codexRollout
+            )
+        case .opencode:
+            return ProviderMetadata(
+                displayName: "OpenCode",
+                usesFileSync: false,
+                supportsProcessTree: false,
+                hasLocalTerminal: true,
+                defaultTerminalAppName: "OpenCode",
+                transcriptKind: .none
+            )
+        case .hermes:
+            return ProviderMetadata(
+                displayName: "Hermes",
+                usesFileSync: false,
+                supportsProcessTree: false,
+                hasLocalTerminal: false,
+                defaultTerminalAppName: "Hermes",
+                transcriptKind: .none
+            )
         }
     }
 
-    /// Whether this provider uses file-based chat history sync (JSONL parsing)
-    var usesFileSync: Bool {
-        switch self {
-        case .claudeCode: true
-        case .codex: true   // Codex uses its own rollout JSONL
-        case .opencode: false  // Plugin pushes events directly
-        case .hermes: false
-        }
-    }
+    // MARK: - Convenience accessors (kept for call-site brevity)
 
-    /// Whether this provider supports process-tree based terminal detection
-    var supportsProcessTree: Bool {
-        switch self {
-        case .claudeCode: true
-        case .codex: false
-        case .opencode: false
-        case .hermes: false
-        }
-    }
-
-    /// Whether this provider runs in a local terminal (vs. remote/Discord/web)
-    var hasLocalTerminal: Bool {
-        switch self {
-        case .claudeCode: true
-        case .codex: true
-        case .opencode: true
-        case .hermes: false  // Hermes runs via Discord, no local terminal
-        }
-    }
+    var displayName: String { metadata.displayName }
+    var usesFileSync: Bool { metadata.usesFileSync }
+    var supportsProcessTree: Bool { metadata.supportsProcessTree }
+    var hasLocalTerminal: Bool { metadata.hasLocalTerminal }
 
     /// Infer provider type from HookEvent.source field
     /// Maintains backward compatibility: source==nil → claudeCode, source=="codex" → codex
