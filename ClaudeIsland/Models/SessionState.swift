@@ -159,6 +159,41 @@ struct SessionState: Equatable, Identifiable, Sendable {
         return sessionId
     }
 
+    /// Whether this session is backed by the Codex CLI rather than Claude Code.
+    var isCodexSession: Bool {
+        if let transcriptPath = codexTranscriptPath, !transcriptPath.isEmpty {
+            return true
+        }
+        let app = terminalApp?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
+        return app == "codex"
+    }
+
+    /// Human-facing agent badge shown in the sessions list.
+    var agentTag: String {
+        isCodexSession ? "Codex" : "Claude"
+    }
+
+    /// Human-facing terminal badge shown in the sessions list.
+    var terminalTag: String {
+        if let wsId = cmuxWorkspaceId, !wsId.isEmpty {
+            return "cmux"
+        }
+        if let surfId = cmuxSurfaceId, !surfId.isEmpty {
+            return "cmux"
+        }
+        if isInTmux {
+            return "tmux"
+        }
+        if let app = terminalApp?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !app.isEmpty {
+            let lower = app.lowercased()
+            if lower != "codex" && lower != "claude" {
+                return app
+            }
+        }
+        return "Terminal"
+    }
+
     /// Display title: summary > latest user message > first user message > project name
     var displayTitle: String {
         conversationInfo.summary ?? conversationInfo.latestUserMessage ?? conversationInfo.firstUserMessage ?? projectName
@@ -344,6 +379,22 @@ struct SessionState: Equatable, Identifiable, Sendable {
     /// Whether the session can be interacted with
     var canInteract: Bool {
         phase.needsAttention
+    }
+
+    /// True when the session has produced no user-visible content at all:
+    /// no tool calls, no chat items, no parsed conversation info.
+    ///
+    /// Used as a safety net to suppress notifications (bounce / sound /
+    /// auto-popup) for "empty shell" sessions — typically claude-mem style
+    /// plugin-spawned Claude children that fire SessionStart + Stop within
+    /// seconds and never accept a user prompt. Also protects against any
+    /// future event source that produces malformed / partial hook payloads.
+    var hasNoContentYet: Bool {
+        toolTracker.seenIds.isEmpty
+            && chatItems.isEmpty
+            && conversationInfo.firstUserMessage == nil
+            && conversationInfo.lastMessage == nil
+            && conversationInfo.summary == nil
     }
 }
 

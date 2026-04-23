@@ -26,6 +26,16 @@ final class PairPhonePlugin: NSObject, MioPlugin {
     func makeView() -> NSView {
         NSHostingView(rootView: PairPhonePluginView())
     }
+
+    /// Matches the music plugin's panel width (440pt) so the expanded area is
+    /// consistent across built-ins and externals. Height is tuned so the full
+    /// pair flow (header + status pill + QR + short code + server info row +
+    /// linked devices) shows without a scrollbar. 580 = header 30 + QR block
+    /// ~200 + shortCode ~60 + server row ~80 + linked devices section + host
+    /// chrome 47 + padding, with room for 1-2 linked devices visible.
+    @objc func preferredPanelSize() -> NSValue {
+        NSValue(size: NSSize(width: 440, height: 580))
+    }
 }
 
 /// Inline pairing panel — no popup. Server config is shown prominently

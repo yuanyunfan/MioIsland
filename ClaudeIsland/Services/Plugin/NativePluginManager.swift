@@ -10,6 +10,24 @@ import AppKit
 import Combine
 import OSLog
 
+/// Host-side debug log for panel-size hint resolution. Writes a single
+/// line to /tmp/mio-host-debug.log each time preferredPanelSize is
+/// evaluated. Strip before release.
+private func debugLogHostPanel(_ msg: String) {
+    let line = "[\(ISO8601DateFormatter().string(from: Date()))] \(msg)\n"
+    let path = "/tmp/mio-host-debug.log"
+    if let data = line.data(using: .utf8) {
+        if FileManager.default.fileExists(atPath: path),
+           let h = try? FileHandle(forWritingTo: URL(fileURLWithPath: path)) {
+            try? h.seekToEnd()
+            try? h.write(contentsOf: data)
+            try? h.close()
+        } else {
+            try? data.write(to: URL(fileURLWithPath: path))
+        }
+    }
+}
+
 @MainActor
 final class NativePluginManager: ObservableObject {
     static let shared = NativePluginManager()
@@ -76,6 +94,73 @@ final class NativePluginManager: ObservableObject {
             let result = instance.perform(sel, with: slot, with: context)
             return result?.takeUnretainedValue() as? NSView
         }
+
+        /// Optional panel size hint. Two ways a plugin can provide one:
+        ///   1. Runtime ObjC method `@objc func preferredPanelSize() -> NSValue`
+        ///      (required for built-in Swift plugins, since they share
+        ///       `Bundle.main` with the host and can't carry their own plist)
+        ///   2. Info.plist keys `MioPluginPreferredWidth` / `MioPluginPreferredHeight`
+        ///      (only consulted for external .bundle plugins — reading them
+        ///       from `Bundle.main` would return the host's values)
+        /// Returns nil when neither path yields a usable size, letting the
+        /// host fall back to its default `(min(screenW*0.48, 620), min(screenH*0.78, 780))`.
+        var preferredPanelSize: CGSize? {
+            let line = "[preferredPanelSize] id=\(id) bundle=\(bundle.bundlePath)"
+            debugLogHostPanel(line)
+
+            // Path 1: runtime selector
+            let sel = NSSelectorFromString("preferredPanelSize")
+            if instance.responds(to: sel),
+               let raw = instance.perform(sel)?.takeUnretainedValue() as? NSValue {
+                let size = raw.sizeValue
+                debugLogHostPanel("  path1 objc sel returned \(size)")
+                if size.width >= 280, size.width <= 1200,
+                   size.height >= 120, size.height <= 900 {
+                    return CGSize(width: size.width, height: size.height)
+                }
+            }
+
+            // Path 2: Info.plist — only valid for external bundles
+            let isExternal = bundle !== Bundle.main
+            let info = bundle.infoDictionary
+
+            // Plist values can come back as NSNumber, Int, or Double via
+            // Swift's Foundation bridging — depends on macOS version +
+            // Swift compiler. Try all three fallbacks so the cast never
+            // fails silently.
+            let rawWAny = info?["MioPluginPreferredWidth"]
+            let rawHAny = info?["MioPluginPreferredHeight"]
+            let rawW: Double? = {
+                if let n = rawWAny as? NSNumber { return n.doubleValue }
+                if let i = rawWAny as? Int { return Double(i) }
+                if let d = rawWAny as? Double { return d }
+                return nil
+            }()
+            let rawH: Double? = {
+                if let n = rawHAny as? NSNumber { return n.doubleValue }
+                if let i = rawHAny as? Int { return Double(i) }
+                if let d = rawHAny as? Double { return d }
+                return nil
+            }()
+            debugLogHostPanel("  path2 external=\(isExternal) rawW=\(String(describing: rawWAny)) rawH=\(String(describing: rawHAny)) W=\(rawW ?? -1) H=\(rawH ?? -1)")
+
+            guard isExternal, let w = rawW, let h = rawH else {
+                debugLogHostPanel("  → nil (external=\(isExternal) W=\(rawW == nil) H=\(rawH == nil))")
+                return nil
+            }
+            guard w >= 280, w <= 1200, h >= 120, h <= 900 else {
+                debugLogHostPanel("  → nil (out of range w=\(w) h=\(h))")
+                return nil
+            }
+            debugLogHostPanel("  → \(w)x\(h)")
+            return CGSize(width: w, height: h)
+        }
+    }
+
+    /// Look up a loaded plugin by id. Used by NotchViewModel to ask for a
+    /// panel size hint before allocating the expanded area.
+    func plugin(id: String) -> LoadedPlugin? {
+        loadedPlugins.first(where: { $0.id == id })
     }
 
     private var pluginsDir: URL {
@@ -230,6 +315,7 @@ final class NativePluginManager: ObservableObject {
             }
         }
         loadedPlugins.removeAll()
+        loadedBundleIdentifiers.removeAll()
     }
 
     func unload(id: String) {
@@ -237,6 +323,15 @@ final class NativePluginManager: ObservableObject {
         let plugin = loadedPlugins[index]
         if plugin.instance.responds(to: Selector(("deactivate"))) {
             plugin.instance.perform(Selector(("deactivate")))
+        }
+        // Critical: drop the bundle identifier from the dedup set,
+        // otherwise a subsequent `loadPlugin` for the same plugin
+        // (uninstall → reinstall via URL, or re-enable) will hit the
+        // "already loaded" guard at loadPlugin's top and silently
+        // skip, leaving the UI claiming "installed" while the
+        // plugin isn't actually in `loadedPlugins`.
+        if let bundleId = plugin.bundle.bundleIdentifier {
+            loadedBundleIdentifiers.remove(bundleId)
         }
         loadedPlugins.remove(at: index)
         Self.log.info("Unloaded plugin: \(id)")
@@ -383,8 +478,26 @@ final class NativePluginManager: ObservableObject {
             throw InstallError.extractionFailed(errStr)
         }
 
-        // Find the .bundle directory inside the extracted tree
-        guard let bundleURL = findBundle(in: extractDir) else {
+        // Find the .bundle directory inside the extracted tree.
+        // Some marketplaces (e.g. miomio.chat) wrap the uploaded zip in
+        // ANOTHER zip so the user-facing download filename matches the
+        // plugin's marketing name. Handle up to one level of nested-zip
+        // by extracting again if the outer archive contains a solitary
+        // .zip instead of a .bundle.
+        var bundleURL = findBundle(in: extractDir)
+        if bundleURL == nil, let nested = findSingleNestedZip(in: extractDir) {
+            let innerDir = tmpDir.appendingPathComponent("extracted-inner", isDirectory: true)
+            try FileManager.default.createDirectory(at: innerDir, withIntermediateDirectories: true)
+            let innerProc = Process()
+            innerProc.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
+            innerProc.arguments = ["-x", "-k", nested.path, innerDir.path]
+            try innerProc.run()
+            innerProc.waitUntilExit()
+            if innerProc.terminationStatus == 0 {
+                bundleURL = findBundle(in: innerDir)
+            }
+        }
+        guard let bundleURL else {
             throw InstallError.bundleNotFound
         }
 
@@ -424,6 +537,26 @@ final class NativePluginManager: ObservableObject {
             }
         }
         return nil
+    }
+
+    /// When the extracted archive contains exactly one .zip (and no
+    /// .bundle), return that nested zip's URL so the caller can
+    /// unwrap it. Happens with marketplaces that re-wrap uploads.
+    private func findSingleNestedZip(in dir: URL) -> URL? {
+        let fm = FileManager.default
+        guard let enumerator = fm.enumerator(
+            at: dir,
+            includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        ) else { return nil }
+        var zips: [URL] = []
+        for case let url as URL in enumerator {
+            if url.pathExtension.lowercased() == "zip" {
+                zips.append(url)
+                if zips.count > 1 { return nil }
+            }
+        }
+        return zips.first
     }
 
     // MARK: - Query

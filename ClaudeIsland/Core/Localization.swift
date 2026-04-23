@@ -146,9 +146,42 @@ enum L10n {
     static var back: String { tr("Back", "返回") }
     static var groupByProject: String { tr("Group by Project", "按项目分组") }
     static var pixelCatMode: String { tr("Pixel Cat Mode", "像素猫模式") }
+    static var notchBuddyStyle: String { tr("Buddy Style", "Buddy 样式") }
+    static var notchBuddyPixelCat: String { tr("Cat", "像素猫") }
+    static var notchBuddyEmoji: String { tr("Emoji", "Emoji") }
+    static var notchBuddyNeon: String { tr("Neon", "霓虹") }
     static var launchAtLogin: String { tr("Launch at Login", "开机启动") }
     static var hooks: String { tr("Hooks", "钩子") }
+    // Hook diagnostics (Advanced tab)
+    static var hookDiagTitle: String { tr("Hook Diagnostics", "Hook 诊断") }
+    static var hookDiagSubtitle: String { tr("Inspect and repair Claude and Codex hook installation.", "检查并修复 Claude 与 Codex 的 hook 安装状态。") }
+    static var hookDiagAgentClaude: String { tr("Claude Code", "Claude Code") }
+    static var hookDiagAgentCodex: String { tr("Codex", "Codex") }
+    static var hookDiagHealthy: String { tr("All good", "一切正常") }
+    static var hookDiagDisabled: String { tr("Not enabled", "未启用") }
+    static func hookDiagErrorCount(_ n: Int) -> String {
+        isChinese ? "\(n) 个错误" : "\(n) error\(n == 1 ? "" : "s")"
+    }
+    static func hookDiagNoticeCount(_ n: Int) -> String {
+        isChinese ? "\(n) 条提示" : "\(n) notice\(n == 1 ? "" : "s")"
+    }
+    static var hookDiagRecheck: String { tr("Re-check", "重新检查") }
+    static var hookDiagReinstall: String { tr("Reinstall", "重新安装") }
+    static var hookDiagUninstall: String { tr("Uninstall", "卸载") }
+    static var hookDiagRepair: String { tr("Auto-repair", "一键修复") }
+    static var hookDiagCleanupLegacy: String { tr("Clean up legacy hooks", "清理遗留 hooks") }
+    static var hookDiagCleanupLegacyHint: String { tr("Remove leftover scripts and config entries from earlier app versions (Claude Island, Code Island).", "移除 Claude Island / Code Island 旧版本遗留的脚本与配置。") }
+    static var hookDiagCodexDisabledHint: String { tr("Codex is turned off. Enable it in the General tab to install its hooks.", "Codex 未启用。请到「通用」标签打开后再安装 hook。") }
+    static var hookDiagIssueScriptMissing: String { tr("Hook script file is missing", "Hook 脚本文件缺失") }
+    static var hookDiagIssueScriptNotExecutable: String { tr("Hook script exists but is not executable", "Hook 脚本无执行权限") }
+    static var hookDiagIssueConfigMalformed: String { tr("Config file contains invalid JSON", "配置文件 JSON 损坏") }
+    static var hookDiagIssueStaleCommand: String { tr("Config references a script path that no longer exists", "配置指向的脚本路径已失效") }
+    static var hookDiagIssueOtherHooks: String { tr("Other (non-CodeIsland) hooks also installed", "检测到其他非 CodeIsland 的 hook") }
+    static var hookDiagIssueManifestMissing: String { tr("Install manifest file missing", "安装清单文件缺失") }
+    static var hookDiagCleanupDone: String { tr("Legacy hooks cleaned.", "已清理遗留 hooks。") }
+    static var hookDiagNothingToClean: String { tr("No legacy hooks found.", "没有遗留 hooks。") }
     static var codexSupport: String { tr("Codex Support", "Codex 支持") }
+    static var codexNotifyOnComplete: String { tr("Codex Notifications", "Codex 通知") }
     static var accessibility: String { tr("Accessibility", "辅助功能") }
     static var version: String { tr("Version", "版本") }
     static var checkForUpdates: String { tr("Check for Updates", "检查更新") }
@@ -158,6 +191,32 @@ enum L10n {
     static var off: String { tr("Off", "关") }
     static var enable: String { tr("Enable", "启用") }
     static var enabled: String { tr("On", "已开启") }
+
+    // MARK: - Completion Panel — phrase defaults
+    static var qrPhraseContinue: String { tr("Continue", "继续") }
+    static var qrPhraseOK: String { tr("OK", "好的") }
+    static var qrPhraseExplain: String { tr("Explain more", "解释一下") }
+    static var qrPhraseRetry: String { tr("Retry", "再试一次") }
+
+    // MARK: - Completion Panel — UI strings
+    static var qrSendFailed: String { tr("Failed to send — terminal unavailable", "发送失败，终端不可用") }
+    static var qrGoToTerminal: String { tr("Go to terminal", "前往终端") }
+    static var qrClose: String { tr("Close", "关闭") }
+    static func subagentDoneBadge(_ n: Int) -> String { tr("\(n) subagents done", "\(n) 个 subagent 完成") }
+    static var pendingToolAllow: String { tr("Allow", "允许") }
+    static var pendingToolDeny: String { tr("Deny", "拒绝") }
+    static func pendingToolAlwaysAllow(_ name: String) -> String { tr("Always Allow \(name)", "总是允许 \(name)") }
+    static var pendingToolNeedsApproval: String { tr("Needs approval", "需授权") }
+    static var pendingToolHighRiskHint: String { tr("High-risk operation — review diff in terminal", "高风险操作，请到终端查看 diff") }
+
+    // MARK: - Completion Panel — QuickReplyPhrasesEditor
+    static var qrEditorAdd: String { tr("Add phrase", "添加短语") }
+    static var qrEditorReset: String { tr("Reset to defaults", "恢复默认") }
+    static var qrEditorMaxHint: String { tr("Max 6 phrases", "最多 6 条") }
+    static var qrEditorMinHint: String { tr("Keep at least one phrase", "至少保留一条") }
+    static var qrEditorDeleteHint: String { tr("Delete", "删除") }
+    static var qrEditorSectionTitle: String { tr("Quick Reply Phrases", "快速应答短语") }
+    static var completionPanelEnabled: String { tr("Completion Panel", "任务完成面板") }
 
     // MARK: - Settings window
     static var systemSettings: String { tr("System Settings", "系统设置") }
@@ -191,6 +250,10 @@ enum L10n {
     static var testSendFailed: String { tr("Failed — check logs tab", "失败 — 请查看日志 tab") }
     static var openAccessibilitySettings: String { tr("Open Accessibility settings", "打开辅助功能设置") }
     static var openAutomationSettings: String { tr("Open Automation settings", "打开自动化设置") }
+    static var repairPermission: String { tr("Repair", "修复权限") }
+    static var repairing: String { tr("Repairing…", "修复中…") }
+    static var repairAccessibilityPermission: String { tr("Repair Accessibility permission", "修复辅助功能权限") }
+    static var repairAutomationPermission: String { tr("Repair Automation permission", "修复自动化权限") }
     static var refreshStatus: String { tr("Refresh", "刷新") }
     static var requestAutomationButton: String { tr("Request Automation permission", "请求自动化权限") }
     static var requestAutomationNoTerminal: String { tr("No supported terminal is running — start cmux/iTerm/Terminal first", "没有受支持的终端在运行 — 请先启动 cmux/iTerm/Terminal") }
@@ -213,7 +276,6 @@ enum L10n {
     static var pairPanelConnecting: String { tr("Connecting…", "连接中…") }
     static var pairPanelStepServerTitle: String { tr("Step 1 · Configure Server", "第 1 步 · 配置服务器") }
     static var pairPanelStepServerBody: String { tr("Set your CodeLight relay server. Your messages sync through it end-to-end encrypted — the server never sees plaintext. Without this step, the QR code cannot be generated.", "先设置一个 CodeLight 中继服务器。你的消息会通过它端到端加密同步 —— 服务端看不到明文。没配好这一步，下面的二维码不会生成。") }
-    static var pairPanelStepServerHint: String { tr("Use your self-hosted server, or the official free server island.wdao.chat", "可以填你自建的服务器，或用官方免费服务器 island.wdao.chat") }
     static var pairPanelServerPlaceholder: String { tr("https://your-server.example", "https://你的服务器.example") }
     static var pairPanelSaveAndConnect: String { tr("Save and Connect", "保存并连接") }
     static var pairPanelChangeServer: String { tr("Change Server", "更换服务器") }
@@ -431,8 +493,6 @@ enum L10n {
     static var smartSuppression: String { tr("Smart Suppression", "智能抑制") }
     static var autoCollapseOnMouseLeave: String { tr("Auto-Collapse on Leave", "离开时自动收起") }
     static var compactCollapsed: String { tr("Compact Notch", "紧凑刘海") }
-    static var autoExpandOnComplete: String { tr("Auto-Expand on Complete", "完成时自动展开") }
-
     // MARK: - Notch customization
     //
     // Deviation from spec: the spec (Section 4.5) lists these keys
@@ -444,18 +504,16 @@ enum L10n {
 
     static var notchSectionHeader: String { tr("Notch", "灵动岛") }
     static var notchTheme: String { tr("Theme", "主题") }
+    // v2 theme line-up (2026-04-20): Classic + six themes designed via
+    // Claude Design. Old names (paper, neonLime, cyber, mint, rosegold,
+    // ocean, aurora, mocha, lavender, cherry) were dropped on reset.
     static var notchThemeClassic: String { tr("Classic", "经典") }
-    static var notchThemePaper: String { tr("Paper", "纸张") }
-    static var notchThemeNeonLime: String { tr("Neon Lime", "霓虹青柠") }
-    static var notchThemeCyber: String { tr("Cyber", "赛博") }
-    static var notchThemeMint: String { tr("Mint", "薄荷") }
-    static var notchThemeSunset: String { tr("Sunset", "日落") }
-    static var notchThemeRosegold: String { tr("Rosé Gold", "玫瑰金") }
-    static var notchThemeOcean: String { tr("Ocean", "深海") }
-    static var notchThemeAurora: String { tr("Aurora", "极光") }
-    static var notchThemeMocha: String { tr("Mocha", "摩卡") }
-    static var notchThemeLavender: String { tr("Lavender", "薰衣草") }
-    static var notchThemeCherry: String { tr("Cherry", "樱桃") }
+    static var notchThemeForest: String { tr("Forest", "森林") }
+    static var notchThemeNeonTokyo: String { tr("Night Circuit", "夜行电路") }
+    static var notchThemeSunset: String { tr("Sunset", "落日") }
+    static var notchThemeRetroArcade: String { tr("Retro Arcade", "复古游戏机") }
+    static var notchThemeHighContrast: String { tr("High Contrast", "高对比") }
+    static var notchThemeSakura: String { tr("Pink Mist", "粉雾") }
     static var notchHoverSpeed: String { tr("Hover Speed", "展开速度") }
     static var notchHoverInstant: String { tr("Fast", "即时") }
     static var notchHoverNormal: String { tr("1s", "1秒") }
@@ -482,19 +540,15 @@ enum L10n {
     static var notchEditReset: String { tr("Reset", "复位") }
     static var notchEditPresetDisabledTooltip: String { tr("Your device doesn't have a hardware notch", "你的设备没有硬件刘海") }
     static func notchThemeName(_ id: NotchThemeID) -> String {
-        switch id {
-        case .classic:  return notchThemeClassic
-        case .paper:    return notchThemePaper
-        case .neonLime: return notchThemeNeonLime
-        case .cyber:    return notchThemeCyber
-        case .mint:     return notchThemeMint
-        case .sunset:   return notchThemeSunset
-        case .rosegold: return notchThemeRosegold
-        case .ocean:    return notchThemeOcean
-        case .aurora:   return notchThemeAurora
-        case .mocha:    return notchThemeMocha
-        case .lavender: return notchThemeLavender
-        case .cherry:   return notchThemeCherry
+        switch id.rawValue {
+        case NotchThemeID.classic.rawValue: return notchThemeClassic
+        case NotchThemeID.forest.rawValue: return notchThemeForest
+        case NotchThemeID.neonTokyo.rawValue: return notchThemeNeonTokyo
+        case NotchThemeID.sunset.rawValue: return notchThemeSunset
+        case NotchThemeID.retroArcade.rawValue: return notchThemeRetroArcade
+        case NotchThemeID.highContrast.rawValue: return notchThemeHighContrast
+        case NotchThemeID.sakura.rawValue: return notchThemeSakura
+        default: return ThemeRegistry.shared.displayName(for: id)
         }
     }
 }

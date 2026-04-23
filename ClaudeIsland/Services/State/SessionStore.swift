@@ -50,6 +50,11 @@ actor SessionStore {
         return Array(sessions.values)
     }
 
+    /// Look up a session by its stable UI identity (pid-sessionId composite).
+    func session(withStableId stableId: String) -> SessionState? {
+        return sessions.values.first(where: { $0.stableId == stableId })
+    }
+
     // MARK: - Initialization
 
     init(livenessChecker: ProcessLivenessChecker = PosixLivenessChecker()) {
@@ -148,6 +153,17 @@ actor SessionStore {
         let sessionId = event.sessionId
         let isNewSession = sessions[sessionId] == nil
         DebugLogger.log("Hook", "\(event.event) status=\(event.status) sid=\(sessionId.prefix(8)) new=\(isNewSession)")
+
+        // Q2: Codex TUI 每次启动都生成一个新 UUIDv7 作为 session_id，matcher
+        // `startup|resume` 让每次 TUI 打开都触发一次 SessionStart。如果据此建
+        // session 条目，用户每开一次 Codex TUI（哪怕还没输入任何 prompt）都会
+        // 多一条空白会话。跳过 Codex 的首次 SessionStart，等真正的
+        // UserPromptSubmit 到来再 createSession。Claude 行为不受影响。
+        if isNewSession && event.source == "codex" && event.event == "SessionStart" {
+            DebugLogger.log("Hook", "skipped Codex SessionStart — wait for UserPromptSubmit")
+            return
+        }
+
         var session = sessions[sessionId] ?? createSession(from: event)
 
         session.pid = event.pid
@@ -1109,6 +1125,38 @@ actor SessionStore {
 
     // MARK: - History Loading
 
+    private static func sanitizedCodexPreview(_ text: String?, maxLength: Int) -> String? {
+        guard let text else { return nil }
+
+        var cleaned = text
+        cleaned = cleaned.replacingOccurrences(
+            of: #"<image\b[^>]*>"#,
+            with: "",
+            options: .regularExpression
+        )
+        cleaned = cleaned.replacingOccurrences(
+            of: #"</image>"#,
+            with: "",
+            options: .regularExpression
+        )
+        cleaned = cleaned.replacingOccurrences(
+            of: #"\[Image #[^\]]+\]"#,
+            with: "",
+            options: .regularExpression
+        )
+        cleaned = cleaned.replacingOccurrences(
+            of: #"\s+"#,
+            with: " ",
+            options: .regularExpression
+        ).trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !cleaned.isEmpty else { return nil }
+        if cleaned.count > maxLength {
+            return String(cleaned.prefix(maxLength - 3)) + "..."
+        }
+        return cleaned
+    }
+
     private func loadHistoryFromFile(sessionId: String, cwd: String) async {
         // Codex sessions: parse rollout JSONL instead of Claude JSONL
         if sessions[sessionId]?.providerType == .codex,
@@ -1118,11 +1166,11 @@ actor SessionStore {
             let lastUserMsg = messages.last(where: { $0.role == .user })
             let conversationInfo = ConversationInfo(
                 summary: nil,
-                lastMessage: messages.last?.textContent,
+                lastMessage: Self.sanitizedCodexPreview(messages.last?.textContent, maxLength: 80),
                 lastMessageRole: messages.last?.role.rawValue,
                 lastToolName: nil,
-                firstUserMessage: firstUserMsg?.textContent,
-                latestUserMessage: lastUserMsg?.textContent,
+                firstUserMessage: Self.sanitizedCodexPreview(firstUserMsg?.textContent, maxLength: 50),
+                latestUserMessage: Self.sanitizedCodexPreview(lastUserMsg?.textContent, maxLength: 60),
                 lastUserMessageDate: lastUserMsg?.timestamp
             )
             await process(.historyLoaded(
@@ -1262,11 +1310,11 @@ actor SessionStore {
             let lastUserMsg = messages.last(where: { $0.role == .user })
             let conversationInfo = ConversationInfo(
                 summary: nil,
-                lastMessage: messages.last?.textContent,
+                lastMessage: Self.sanitizedCodexPreview(messages.last?.textContent, maxLength: 80),
                 lastMessageRole: messages.last?.role.rawValue,
                 lastToolName: nil,
-                firstUserMessage: firstUserMsg?.textContent,
-                latestUserMessage: lastUserMsg?.textContent,
+                firstUserMessage: Self.sanitizedCodexPreview(firstUserMsg?.textContent, maxLength: 50),
+                latestUserMessage: Self.sanitizedCodexPreview(lastUserMsg?.textContent, maxLength: 60),
                 lastUserMessageDate: lastUserMsg?.timestamp
             )
             await self?.process(.historyLoaded(
